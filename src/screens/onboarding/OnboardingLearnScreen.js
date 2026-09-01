@@ -53,7 +53,7 @@ export default function OnboardingLearnScreen() {
     } finally {
       setSaving(false);
       if (isFirstTimeOnboarding) {
-        router.replace('/(tabs)');
+        router.push({ pathname: '/(onboarding)/style', params: { from: 'onboarding' } });
       } else if (router.canGoBack()) {
         router.back();
       } else {
@@ -65,7 +65,7 @@ export default function OnboardingLearnScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.step}>Step 2 of 2</Text>
+        <Text style={styles.step}>Step 2 of 3</Text>
         <Text style={styles.title}>What do you want to learn?</Text>
         <Text style={styles.subtitle}>
           Pick a few categories — we'll use them to recommend skills to you. You can change this anytime.
@@ -120,7 +120,13 @@ export default function OnboardingLearnScreen() {
 
         <View style={styles.footer}>
           <Button
-            title={selected.length > 0 ? `Finish (${selected.length} selected)` : 'Skip for now'}
+            title={
+              selected.length > 0
+                ? `${isFirstTimeOnboarding ? 'Continue' : 'Save'} (${selected.length} selected)`
+                : isFirstTimeOnboarding
+                  ? 'Skip for now'
+                  : 'Save'
+            }
             onPress={finish}
             loading={saving}
           />

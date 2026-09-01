@@ -14,7 +14,7 @@ export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 if (!isSupabaseConfigured && __DEV__) {
   console.warn(
-    '[supabase] EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY are not set — running against local mock data.'
+    '[supabase] EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY are not set. The app has no offline mode — see ConfigErrorScreen / README.md.'
   );
 }
 

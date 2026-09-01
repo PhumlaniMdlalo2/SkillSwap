@@ -7,9 +7,6 @@ export function useMatchingLogic({ allCandidates, preferences }) {
       if (preferences?.skillCategory && candidate.category !== preferences.skillCategory) {
         return false;
       }
-      if (preferences?.maxDistance && candidate.distanceKm > preferences.maxDistance) {
-        return false;
-      }
       return true;
     });
   }, [allCandidates, preferences]);

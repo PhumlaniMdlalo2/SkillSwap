@@ -12,21 +12,32 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES, RADII, DEFAULT_SESSION_TOKEN_COST } from '../../utils/constants';
-import { formatDate, formatTime } from '../../utils/helpers';
+import { formatTime, groupSlotsByDay } from '../../utils/helpers';
 import { notify } from '../../utils/alert';
 
 const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-const DAY_OPTIONS = Array.from({ length: 14 }, (_, i) => {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + i + 1);
-  return date;
-});
+const DAYS = [
+  { value: 0, label: 'Sun' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+];
 
 function formatHour(hour) {
   const period = hour < 12 ? 'AM' : 'PM';
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
   return `${displayHour}:00 ${period}`;
+}
+
+function parseHour(timeString) {
+  return parseInt(timeString.split(':')[0], 10);
+}
+
+function emptyWeeklyHours() {
+  return Object.fromEntries(DAYS.map((d) => [d.value, { open: false, startHour: 9, endHour: 17 }]));
 }
 
 export default function SkillDetailScreen() {
@@ -37,10 +48,9 @@ export default function SkillDetailScreen() {
   const [availability, setAvailability] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(DAY_OPTIONS[0]);
-  const [selectedHour, setSelectedHour] = useState(HOURS[0]);
-  const [addingSlot, setAddingSlot] = useState(false);
+  const [weeklyHours, setWeeklyHours] = useState(emptyWeeklyHours);
+  const [hoursLoaded, setHoursLoaded] = useState(false);
+  const [savingHours, setSavingHours] = useState(false);
 
   const [message, setMessage] = useState('');
   const [requesting, setRequesting] = useState(false);
@@ -51,10 +61,23 @@ export default function SkillDetailScreen() {
     Promise.all([
       api.getSkillById(id),
       isOwner ? api.getAllAvailabilityForSkill(id) : Promise.resolve([]),
+      isOwner ? api.getAvailabilityHours(id) : Promise.resolve([]),
     ])
-      .then(([skillData, slots]) => {
+      .then(([skillData, slots, hours]) => {
         setSkill(skillData);
         setAvailability(slots);
+        if (isOwner) {
+          const next = emptyWeeklyHours();
+          hours.forEach((h) => {
+            next[h.day_of_week] = {
+              open: true,
+              startHour: parseHour(h.start_time),
+              endHour: parseHour(h.end_time),
+            };
+          });
+          setWeeklyHours(next);
+          setHoursLoaded(true);
+        }
       })
       .finally(() => setLoading(false));
   };
@@ -64,12 +87,24 @@ export default function SkillDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isOwner]);
 
+  // Keeps the rolling booking window advancing every time the teacher opens
+  // this page, without needing a cron job — generation is idempotent
+  // (ON CONFLICT DO NOTHING server-side), so this is a cheap no-op most of
+  // the time.
+  useEffect(() => {
+    if (!isOwner || !skill?.skill_id) return;
+    api
+      .generateAvailabilitySlots(skill.skill_id)
+      .then(() => api.getAllAvailabilityForSkill(skill.skill_id))
+      .then(setAvailability)
+      .catch(() => {});
+  }, [isOwner, skill?.skill_id]);
+
   const handleRequest = async () => {
     setRequesting(true);
     try {
       await api.requestSession({
         skillId: skill.skill_id,
-        learnerId: user.user_id,
         message: message.trim() || undefined,
       });
       notify(
@@ -84,26 +119,44 @@ export default function SkillDetailScreen() {
     }
   };
 
-  const handleAddSlot = async () => {
-    setAddingSlot(true);
-    try {
-      const start = new Date(selectedDay);
-      start.setHours(selectedHour, 0, 0, 0);
-      const end = new Date(start);
-      end.setHours(end.getHours() + 1);
+  const handleToggleDay = (dayValue) => {
+    setWeeklyHours((prev) => ({
+      ...prev,
+      [dayValue]: { ...prev[dayValue], open: !prev[dayValue].open },
+    }));
+  };
 
-      await api.addAvailability({
-        userId: user.user_id,
-        skillId: skill.skill_id,
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      });
-      setShowAddForm(false);
-      load();
+  const handleChangeStartHour = (dayValue, hour) => {
+    setWeeklyHours((prev) => {
+      const day = prev[dayValue];
+      const endHour = hour >= day.endHour ? Math.min(hour + 1, HOURS[HOURS.length - 1]) : day.endHour;
+      return { ...prev, [dayValue]: { ...day, startHour: hour, endHour } };
+    });
+  };
+
+  const handleChangeEndHour = (dayValue, hour) => {
+    setWeeklyHours((prev) => {
+      const day = prev[dayValue];
+      if (hour <= day.startHour) return prev;
+      return { ...prev, [dayValue]: { ...day, endHour: hour } };
+    });
+  };
+
+  const handleSaveHours = async () => {
+    setSavingHours(true);
+    try {
+      const hours = DAYS.filter((d) => weeklyHours[d.value].open).map((d) => ({
+        day_of_week: d.value,
+        start_time: `${weeklyHours[d.value].startHour}:00:00`,
+        end_time: `${weeklyHours[d.value].endHour}:00:00`,
+      }));
+      await api.setAvailabilityHours({ skillId: skill.skill_id, hours });
+      setAvailability(await api.getAllAvailabilityForSkill(skill.skill_id));
+      notify('Hours saved', 'Your weekly availability has been updated.');
     } catch (err) {
-      notify('Could not add this time slot', err.message ?? 'Please try again.');
+      notify('Could not save your hours', err.message ?? 'Please try again.');
     } finally {
-      setAddingSlot(false);
+      setSavingHours(false);
     }
   };
 
@@ -152,77 +205,107 @@ export default function SkillDetailScreen() {
 
         {isOwner ? (
           <>
-            <View style={styles.ownerHeaderRow}>
-              <Text style={styles.sectionTitle}>Your availability</Text>
-              <Pressable
-                onPress={() => setShowAddForm((prev) => !prev)}
-                hitSlop={8}
-                accessibilityLabel={showAddForm ? 'Close add availability form' : 'Add availability slot'}
-              >
-                <Ionicons name={showAddForm ? 'close' : 'add-circle'} size={24} color={COLORS.primary} />
-              </Pressable>
-            </View>
-
-            {showAddForm && (
-              <View style={styles.addForm}>
-                <Text style={styles.addFormLabel}>Day</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-                  {DAY_OPTIONS.map((day) => {
-                    const active = day.toDateString() === selectedDay.toDateString();
-                    return (
+            <Text style={styles.sectionTitle}>Your weekly hours</Text>
+            <View style={styles.weeklyHoursList}>
+              {DAYS.map((day) => {
+                const dayHours = weeklyHours[day.value];
+                return (
+                  <View key={day.value} style={styles.dayRow}>
+                    <View style={styles.dayRowHeader}>
+                      <Text style={styles.dayLabel}>{day.label}</Text>
                       <Pressable
-                        key={day.toISOString()}
-                        onPress={() => setSelectedDay(day)}
-                        style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => handleToggleDay(day.value)}
+                        style={[styles.dayTogglePill, dayHours.open && styles.dayTogglePillActive]}
                       >
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{formatDate(day)}</Text>
+                        <Text style={[styles.dayToggleText, dayHours.open && styles.dayToggleTextActive]}>
+                          {dayHours.open ? 'Open' : 'Closed'}
+                        </Text>
                       </Pressable>
-                    );
-                  })}
-                </ScrollView>
-
-                <Text style={styles.addFormLabel}>Time</Text>
-                <View style={styles.chipRow}>
-                  {HOURS.map((hour) => {
-                    const active = hour === selectedHour;
-                    return (
-                      <Pressable
-                        key={hour}
-                        onPress={() => setSelectedHour(hour)}
-                        style={[styles.chip, active && styles.chipActive]}
-                      >
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{formatHour(hour)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <Button title="Add Time Slot" onPress={handleAddSlot} loading={addingSlot} style={{ marginTop: SPACING.sm }} />
-              </View>
-            )}
-
-            {availability.length === 0 ? (
-              <Text style={styles.emptyText}>
-                You haven't added any availability yet. Tap + to let learners know when you're free.
-              </Text>
-            ) : (
-              <View style={styles.slotList}>
-                {availability.map((slot) => (
-                  <View key={slot.availability_id} style={styles.ownerSlot}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.slotText}>
-                        {formatDate(slot.start_time)} · {formatTime(slot.start_time)}
-                      </Text>
                     </View>
-                    <Badge label={slot.booked ? 'Booked' : 'Open'} tone={slot.booked ? 'warning' : 'success'} />
-                    {!slot.booked && (
-                      <Pressable onPress={() => handleDeleteSlot(slot.availability_id)} hitSlop={8} style={{ marginLeft: SPACING.sm }}>
-                        <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                      </Pressable>
+
+                    {dayHours.open && (
+                      <View style={styles.dayHourPickers}>
+                        <View style={styles.dayHourGroup}>
+                          <Text style={styles.dayHourLabel}>Start</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                            {HOURS.map((hour) => {
+                              const active = hour === dayHours.startHour;
+                              return (
+                                <Pressable
+                                  key={hour}
+                                  onPress={() => handleChangeStartHour(day.value, hour)}
+                                  style={[styles.chip, active && styles.chipActive]}
+                                >
+                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{formatHour(hour)}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                        <View style={styles.dayHourGroup}>
+                          <Text style={styles.dayHourLabel}>End</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                            {HOURS.map((hour) => {
+                              const active = hour === dayHours.endHour;
+                              return (
+                                <Pressable
+                                  key={hour}
+                                  onPress={() => handleChangeEndHour(day.value, hour)}
+                                  style={[styles.chip, active && styles.chipActive]}
+                                >
+                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{formatHour(hour)}</Text>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      </View>
                     )}
                   </View>
-                ))}
-              </View>
+                );
+              })}
+            </View>
+
+            {hoursLoaded && Object.values(weeklyHours).every((d) => !d.open) && (
+              <Text style={styles.emptyText}>
+                You haven't set any open hours yet — toggle a day on above to get started.
+              </Text>
+            )}
+
+            <Text style={styles.hintText}>
+              Turning off a day won't remove times you've already opened — delete individual slots below if you no
+              longer need one.
+            </Text>
+
+            <Button title="Save Hours" onPress={handleSaveHours} loading={savingHours} style={{ marginTop: SPACING.sm }} />
+
+            <Text style={[styles.sectionTitle, { marginTop: SPACING.lg }]}>Open times</Text>
+            {availability.length === 0 ? (
+              <Text style={styles.emptyText}>
+                You haven't added any availability yet. Set your hours above to let learners know when you're free.
+              </Text>
+            ) : (
+              groupSlotsByDay(availability).map((group) => (
+                <View key={group.key} style={styles.dayGroup}>
+                  <Text style={styles.dayGroupHeader}>{group.label}</Text>
+                  <View style={styles.slotChipRow}>
+                    {group.slots.map((slot) => (
+                      <View key={slot.availability_id} style={[styles.slotChip, slot.booked && styles.slotChipBooked]}>
+                        <Text style={[styles.slotChipText, slot.booked && styles.slotChipTextBooked]}>
+                          {formatTime(slot.start_time)}
+                        </Text>
+                        {slot.booked ? (
+                          <Ionicons name="lock-closed" size={12} color={COLORS.token} style={{ marginLeft: 4 }} />
+                        ) : (
+                          <Pressable onPress={() => handleDeleteSlot(slot.availability_id)} hitSlop={8} style={{ marginLeft: 4 }}>
+                            <Ionicons name="close-circle" size={16} color={COLORS.danger} />
+                          </Pressable>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))
             )}
           </>
         ) : (
@@ -232,13 +315,13 @@ export default function SkillDetailScreen() {
               <View style={styles.requestRow}>
                 <View>
                   <Text style={styles.costLabel}>Cost</Text>
-                  <Text style={styles.costValue}>{DEFAULT_SESSION_TOKEN_COST} token</Text>
+                  <Text style={styles.costValue}>{DEFAULT_SESSION_TOKEN_COST} token / hour</Text>
                 </View>
                 <Ionicons name="calendar-outline" size={28} color={COLORS.primary} />
               </View>
               <Text style={styles.requestHint}>
-                Send a request to {skill.teacher?.name ?? 'the teacher'}. Once they accept, you'll pick a time from
-                their open availability.
+                Send a request to {skill.teacher?.name ?? 'the teacher'}. Once they accept, you'll pick one or more
+                consecutive hours from their open availability.
               </Text>
               <Input
                 placeholder="Add a note (optional) — what would you like to focus on?"
@@ -310,24 +393,64 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     color: COLORS.textMuted,
   },
-  ownerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  weeklyHoursList: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
-  addForm: {
+  dayRow: {
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: RADII.lg,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
+    gap: SPACING.sm,
   },
-  addFormLabel: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '600',
+  dayRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dayLabel: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+  },
+  dayTogglePill: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs + 2,
+    borderRadius: RADII.round,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  dayTogglePillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  dayToggleText: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
+  dayToggleTextActive: {
+    color: COLORS.white,
+  },
+  dayHourPickers: {
+    gap: SPACING.sm,
+  },
+  dayHourGroup: {
+    gap: SPACING.xs,
+  },
+  dayHourLabel: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  hintText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textFaint,
+    marginTop: SPACING.xs,
+    lineHeight: 16,
   },
   chipRow: {
     flexDirection: 'row',
@@ -355,23 +478,41 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: COLORS.white,
   },
-  slotList: {
-    gap: SPACING.sm,
+  dayGroup: {
+    marginBottom: SPACING.md,
   },
-  ownerSlot: {
+  dayGroupHeader: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    marginBottom: SPACING.xs,
+  },
+  slotChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  slotChip: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingVertical: SPACING.sm + 2,
-    paddingHorizontal: SPACING.md,
+    borderRadius: RADII.round,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
     backgroundColor: COLORS.surface,
   },
-  slotText: {
+  slotChipBooked: {
+    borderColor: COLORS.tokenLight,
+    backgroundColor: COLORS.tokenLight,
+  },
+  slotChipText: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.text,
     fontWeight: '600',
+  },
+  slotChipTextBooked: {
+    color: COLORS.token,
   },
   requestCard: {
     marginBottom: SPACING.md,

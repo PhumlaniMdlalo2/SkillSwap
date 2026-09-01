@@ -7,8 +7,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../src/store/AuthContext';
 import { WalletProvider } from '../src/store/WalletContext';
 import { COLORS } from '../src/utils/constants';
+import { isSupabaseConfigured } from '../src/services/supabase';
+import ConfigErrorScreen from '../src/screens/ConfigErrorScreen';
 
 export default function RootLayout() {
+  if (!isSupabaseConfigured) {
+    return (
+      <SafeAreaProvider>
+        <ConfigErrorScreen />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -38,6 +48,7 @@ export default function RootLayout() {
               <Stack.Screen name="requests/[id]/schedule" options={{ headerShown: true, title: 'Book Appointment' }} />
               <Stack.Screen name="wallet/transactions" options={{ headerShown: true, title: 'Transactions' }} />
               <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
+              <Stack.Screen name="sessions/index" options={{ headerShown: true, title: 'My Sessions' }} />
               <Stack.Screen name="sessions/[id]/index" options={{ headerShown: true, title: 'Session' }} />
               <Stack.Screen
                 name="sessions/[id]/review"

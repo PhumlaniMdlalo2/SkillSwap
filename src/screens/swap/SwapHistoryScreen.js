@@ -1,34 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Card from '../../components/ui/Card';
+import Avatar from '../../components/ui/Avatar';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import { useSwapStore } from '../../store/swapStore';
+import { useAuth } from '../../store/useAppHooks';
 import { swapService } from '../../services/swapService';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 import { timeAgo } from '../../utils/helpers';
+import { confirmAction, notify } from '../../utils/alert';
 
 const TABS = [
+  { key: 'matches', label: 'Matches' },
   { key: 'right', label: 'Swapped' },
   { key: 'left', label: 'Passed' },
   { key: 'maybe', label: 'Saved' },
 ];
 
 export default function SwapHistoryScreen() {
-  const { candidates } = useSwapStore();
-  const [tab, setTab] = useState('right');
+  const { user } = useAuth();
+  const [tab, setTab] = useState('matches');
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
+    if (!user) return;
     setLoading(true);
-    swapService.fetchSwipeHistory(tab).then((data) => {
+    const fetcher = tab === 'matches' ? swapService.fetchMatches(user.user_id) : swapService.fetchSwipeHistory(tab);
+    fetcher.then((data) => {
       setHistory(data);
       setLoading(false);
     });
-  }, [tab]);
+  };
 
-  const candidateFor = (targetUserId) => candidates.find((c) => c.id === targetUserId);
+  useEffect(load, [tab, user]);
+
+  const handleUnmatch = (matchId) => {
+    confirmAction('Unmatch?', "You'll both stop seeing each other as a match, and could reappear in each other's decks later.", {
+      confirmText: 'Unmatch',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await swapService.unmatch(matchId);
+          setHistory((prev) => prev.filter((item) => item.id !== matchId));
+        } catch (err) {
+          notify('Could not unmatch', err.message ?? 'Please try again.');
+        }
+      },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -56,11 +77,20 @@ export default function SwapHistoryScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={<Text style={styles.emptyText}>Nothing here yet.</Text>}
           renderItem={({ item }) => {
-            const candidate = candidateFor(item.targetUserId);
+            const person = tab === 'matches' ? item.counterpart : item.target;
+            const when = tab === 'matches' ? item.matchedAt : item.createdAt;
             return (
               <Card style={styles.row}>
-                <Text style={styles.name}>{candidate?.name ?? 'SkillSwap member'}</Text>
-                <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
+                <Avatar uri={person?.avatar} name={person?.name} size={36} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{person?.name ?? 'SkillSwap member'}</Text>
+                </View>
+                <Text style={styles.time}>{timeAgo(when)}</Text>
+                {tab === 'matches' && (
+                  <Pressable onPress={() => handleUnmatch(item.id)} hitSlop={8} style={{ marginLeft: SPACING.sm }}>
+                    <Ionicons name="close-circle-outline" size={20} color={COLORS.danger} />
+                  </Pressable>
+                )}
               </Card>
             );
           }}
@@ -122,8 +152,8 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: SPACING.sm,
     marginBottom: SPACING.sm,
   },
   name: {

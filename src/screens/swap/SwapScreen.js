@@ -44,18 +44,15 @@ export default function SwapScreen() {
     if (!currentCandidate || isSwiping) return;
     setIsSwiping(true);
     try {
-      await swapService.handleSwipe(currentCandidate.id, direction);
+      const { matched } = await swapService.swipe(currentCandidate.id, direction);
       addSwipe({ targetUserId: currentCandidate.id, direction });
 
-      if (direction === 'right') {
-        const isMatch = await swapService.checkMutualMatch(currentCandidate.id);
-        if (isMatch) {
-          addMatch({ userId2: currentCandidate.id, matchedAt: new Date().toISOString() });
-          resetAnimation();
-          setCurrentIndex(currentIndex + 1);
-          router.push({ pathname: '/swap/results', params: { candidateId: currentCandidate.id } });
-          return;
-        }
+      if (matched) {
+        addMatch({ userId2: currentCandidate.id, matchedAt: new Date().toISOString() });
+        resetAnimation();
+        setCurrentIndex(currentIndex + 1);
+        router.push({ pathname: '/swap/results', params: { candidateId: currentCandidate.id } });
+        return;
       }
 
       resetAnimation();
@@ -67,10 +64,22 @@ export default function SwapScreen() {
     }
   };
 
+  const handleUndo = async () => {
+    if (currentIndex === 0 || isSwiping) return;
+    setIsSwiping(true);
+    try {
+      await swapService.undoLastSwipe();
+      setCurrentIndex(currentIndex - 1);
+    } catch (err) {
+      setError(err.message ?? 'Could not undo');
+    } finally {
+      setIsSwiping(false);
+    }
+  };
+
   const { gesture, translateX, translateY } = useSwipeGesture({
     onSwipeLeft: () => handleSwipe('left'),
     onSwipeRight: () => handleSwipe('right'),
-    onSwipeMaybe: () => handleSwipe('maybe'),
     cardWidth: CARD_WIDTH,
   });
 
@@ -120,7 +129,7 @@ export default function SwapScreen() {
   if (!currentCandidate) {
     return (
       <SafeAreaView style={styles.container}>
-        <SwapEmptyState onRefresh={loadCandidates} />
+        <SwapEmptyState onRefresh={loadCandidates} onUndo={handleUndo} canUndo={currentIndex > 0} />
       </SafeAreaView>
     );
   }
@@ -134,12 +143,20 @@ export default function SwapScreen() {
             {currentIndex + 1} of {filteredCandidates?.length ?? 0}
           </Text>
         </View>
-        <Ionicons
-          name="options-outline"
-          size={22}
-          color={COLORS.textMuted}
-          onPress={() => router.push('/swap/settings')}
-        />
+        <View style={styles.headerIcons}>
+          <Ionicons
+            name="time-outline"
+            size={22}
+            color={COLORS.textMuted}
+            onPress={() => router.push('/swap/history')}
+          />
+          <Ionicons
+            name="options-outline"
+            size={22}
+            color={COLORS.textMuted}
+            onPress={() => router.push('/swap/settings')}
+          />
+        </View>
       </View>
 
       <View style={styles.cardContainer}>
@@ -169,7 +186,8 @@ export default function SwapScreen() {
 
       <SwipeActions
         onDecline={() => handleSwipe('left')}
-        onMaybe={() => handleSwipe('maybe')}
+        onUndo={handleUndo}
+        canUndo={currentIndex > 0}
         onAccept={() => handleSwipe('right')}
         isLoading={isSwiping}
       />
@@ -193,6 +211,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.xl,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
   },
   headerSubtitle: {
     fontSize: FONT_SIZES.xs,

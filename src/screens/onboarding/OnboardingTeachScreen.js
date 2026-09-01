@@ -57,7 +57,7 @@ export default function OnboardingTeachScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.step}>Step 1 of 2</Text>
+        <Text style={styles.step}>Step 1 of 3</Text>
         <Text style={styles.title}>What can you teach?</Text>
         <Text style={styles.subtitle}>
           Add at least one skill to start earning tokens. You can always add more later.

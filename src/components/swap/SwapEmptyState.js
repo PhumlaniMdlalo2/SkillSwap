@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Button from '../ui/Button';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 
-export default function SwapEmptyState({ onRefresh }) {
+export default function SwapEmptyState({ onRefresh, onUndo, canUndo }) {
   return (
     <View style={styles.container}>
       <View style={styles.iconWrap}>
@@ -15,6 +15,15 @@ export default function SwapEmptyState({ onRefresh }) {
         You've seen everyone nearby. Check back later or adjust your preferences.
       </Text>
       <Button title="Refresh" onPress={onRefresh} fullWidth={false} style={styles.button} />
+      {canUndo ? (
+        <Button
+          title="Undo last swipe"
+          onPress={onUndo}
+          variant="ghost"
+          fullWidth={false}
+          style={styles.button}
+        />
+      ) : null}
     </View>
   );
 }

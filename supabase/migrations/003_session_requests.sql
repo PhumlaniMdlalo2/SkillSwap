@@ -96,7 +96,7 @@ begin
   end if;
 
   update public.session_requests
-  set status = case when p_accept then 'accepted' else 'declined' end,
+  set status = case when p_accept then 'accepted' else 'declined' end::public.request_status,
       responded_at = now()
   where request_id = p_request_id
   returning * into v_request;

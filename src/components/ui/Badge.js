@@ -13,7 +13,9 @@ export default function Badge({ label, tone = 'neutral' }) {
   const palette = TONES[tone] ?? TONES.neutral;
   return (
     <View style={[styles.badge, { backgroundColor: palette.bg }]}>
-      <Text style={[styles.label, { color: palette.fg }]}>{label}</Text>
+      <Text style={[styles.label, { color: palette.fg }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
