@@ -60,6 +60,24 @@ export function timeAgo(dateInput) {
   return 'just now';
 }
 
+// Buckets a list of { start_time } slots into same-day groups, in the order
+// each day is first encountered — used anywhere a flat slot list would
+// otherwise repeat the same date on every row.
+export function groupSlotsByDay(slots) {
+  const groups = [];
+  const byKey = new Map();
+  for (const slot of slots) {
+    const key = new Date(slot.start_time).toDateString();
+    if (!byKey.has(key)) {
+      const group = { key, label: formatDate(slot.start_time), slots: [] };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    byKey.get(key).slots.push(slot);
+  }
+  return groups;
+}
+
 export function formatDuration(minutes) {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);

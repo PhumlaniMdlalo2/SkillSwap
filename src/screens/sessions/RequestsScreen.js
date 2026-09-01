@@ -27,6 +27,15 @@ const STATUS_LABEL = {
   scheduled: 'Scheduled',
 };
 
+// The teacher never picks a time themselves — they publish open slots on the
+// skill once, and the learner picks one. Reuse the shared label except for
+// "accepted", where the generic wording wrongly implies the teacher has an
+// action to take here.
+const TEACHER_STATUS_LABEL = {
+  ...STATUS_LABEL,
+  accepted: 'Accepted — waiting on them',
+};
+
 export default function RequestsScreen() {
   const { user } = useAuth();
   const [requests, setRequests] = useState([]);
@@ -78,11 +87,11 @@ export default function RequestsScreen() {
               <View style={styles.headerRow}>
                 <Avatar uri={request.learner?.avatar} name={request.learner?.name} size={36} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{request.learner?.name ?? 'A learner'}</Text>
-                  <Text style={styles.skillTitle}>{request.skill?.title}</Text>
+                  <Text style={styles.name} numberOfLines={1}>{request.learner?.name ?? 'A learner'}</Text>
+                  <Text style={styles.skillTitle} numberOfLines={1}>{request.skill?.title}</Text>
                 </View>
-                <Badge label={STATUS_LABEL[request.status]} tone={STATUS_TONE[request.status]} />
               </View>
+              <Badge label={TEACHER_STATUS_LABEL[request.status]} tone={STATUS_TONE[request.status]} />
               {request.message ? <Text style={styles.message}>"{request.message}"</Text> : null}
               <Text style={styles.time}>{timeAgo(request.created_at)}</Text>
 
@@ -105,6 +114,15 @@ export default function RequestsScreen() {
                   />
                 </View>
               )}
+              {request.status === 'accepted' && (
+                <Button
+                  title="Manage Availability"
+                  variant="outline"
+                  fullWidth={false}
+                  style={{ marginTop: SPACING.sm }}
+                  onPress={() => router.push(`/skills/${request.skill_id}`)}
+                />
+              )}
             </Card>
           ))
         )}
@@ -124,11 +142,11 @@ export default function RequestsScreen() {
               <View style={styles.headerRow}>
                 <Avatar uri={request.teacher?.avatar} name={request.teacher?.name} size={36} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{request.teacher?.name ?? 'A teacher'}</Text>
-                  <Text style={styles.skillTitle}>{request.skill?.title}</Text>
+                  <Text style={styles.name} numberOfLines={1}>{request.teacher?.name ?? 'A teacher'}</Text>
+                  <Text style={styles.skillTitle} numberOfLines={1}>{request.skill?.title}</Text>
                 </View>
-                <Badge label={STATUS_LABEL[request.status]} tone={STATUS_TONE[request.status]} />
               </View>
+              <Badge label={STATUS_LABEL[request.status]} tone={STATUS_TONE[request.status]} />
               <Text style={styles.time}>{timeAgo(request.created_at)}</Text>
               {request.status === 'accepted' && (
                 <Button

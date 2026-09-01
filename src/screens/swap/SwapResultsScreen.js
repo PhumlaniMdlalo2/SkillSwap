@@ -50,6 +50,14 @@ export default function SwapResultsScreen() {
         ) : null}
 
         <View style={styles.actions}>
+          {candidate?.teachesSkillId ? (
+            <Button
+              title={`Request a Session — ${candidate.teaches}`}
+              variant="secondary"
+              style={{ backgroundColor: COLORS.white }}
+              onPress={() => router.push(`/skills/${candidate.teachesSkillId}`)}
+            />
+          ) : null}
           <Button title="Keep Browsing" variant="secondary" onPress={() => router.back()} />
           <Button
             title="View Profile"

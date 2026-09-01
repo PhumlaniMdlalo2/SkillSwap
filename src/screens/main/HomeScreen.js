@@ -84,8 +84,8 @@ export default function HomeScreen() {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming sessions</Text>
-          <Text style={styles.sectionLink} onPress={() => router.push('/skills/my-skills')}>
-            My skills
+          <Text style={styles.sectionLink} onPress={() => router.push('/sessions')}>
+            See all
           </Text>
         </View>
 

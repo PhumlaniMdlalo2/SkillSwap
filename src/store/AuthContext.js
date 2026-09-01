@@ -63,6 +63,13 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // For screens that mutate the profile row themselves (e.g. avatar upload)
+  // and already have the fresh row back from Supabase — pushes it into
+  // context without a redundant re-fetch.
+  const updateUser = useCallback((nextUser) => {
+    setUser(nextUser);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -72,8 +79,9 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      updateUser,
     }),
-    [user, initializing, authError, login, register, logout]
+    [user, initializing, authError, login, register, logout, updateUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

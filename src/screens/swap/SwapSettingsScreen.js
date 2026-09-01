@@ -1,27 +1,39 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Switch, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Button from '../../components/ui/Button';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import { useAuth } from '../../store/useAppHooks';
 import { useSwapStore } from '../../store/swapStore';
 import { swapService } from '../../services/swapService';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
 
-const DISTANCES = [10, 25, 50, 100];
-
 export default function SwapSettingsScreen() {
+  const { user } = useAuth();
   const { preferences, setPreferences } = useSwapStore();
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    swapService.getSwapPreferences(user.user_id).then((stored) => {
+      setPreferences(stored);
+      setLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await swapService.updateSwapPreferences(preferences);
+      await swapService.updateSwapPreferences(user.user_id, preferences);
       router.back();
     } finally {
       setSaving(false);
     }
   };
+
+  if (loading) return <LoadingSpinner label="Loading preferences…" />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -44,21 +56,6 @@ export default function SwapSettingsScreen() {
             >
               <Text style={[styles.chipText, preferences.skillCategory === category && styles.chipTextActive]}>
                 {category}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.sectionLabel}>Maximum distance</Text>
-        <View style={styles.chipRow}>
-          {DISTANCES.map((distance) => (
-            <Pressable
-              key={distance}
-              onPress={() => setPreferences({ maxDistance: distance })}
-              style={[styles.chip, preferences.maxDistance === distance && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, preferences.maxDistance === distance && styles.chipTextActive]}>
-                {distance} km
               </Text>
             </Pressable>
           ))}

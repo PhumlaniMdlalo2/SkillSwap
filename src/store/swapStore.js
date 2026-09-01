@@ -7,7 +7,6 @@ export const useSwapStore = create((set, get) => ({
   swipeHistory: [],
   preferences: {
     skillCategory: null,
-    maxDistance: 50,
     notificationsEnabled: true,
   },
   loading: false,

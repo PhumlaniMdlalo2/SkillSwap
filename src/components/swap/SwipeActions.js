@@ -3,11 +3,17 @@ import { View, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADII, SPACING, SHADOW } from '../../utils/constants';
 
-export default function SwipeActions({ onDecline, onMaybe, onAccept, isLoading }) {
+export default function SwipeActions({ onDecline, onUndo, onAccept, canUndo, isLoading }) {
   return (
     <View style={styles.row}>
       <ActionButton icon="close" color={COLORS.danger} onPress={onDecline} disabled={isLoading} />
-      <ActionButton icon="bookmark" color={COLORS.token} onPress={onMaybe} disabled={isLoading} small />
+      <ActionButton
+        icon="arrow-undo"
+        color={COLORS.textMuted}
+        onPress={onUndo}
+        disabled={isLoading || !canUndo}
+        small
+      />
       <ActionButton icon="swap-horizontal" color={COLORS.secondary} onPress={onAccept} disabled={isLoading} />
       {isLoading ? <ActivityIndicator style={styles.spinner} color={COLORS.primary} /> : null}
     </View>

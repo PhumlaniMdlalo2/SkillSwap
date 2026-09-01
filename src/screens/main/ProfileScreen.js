@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Avatar from '../../components/ui/Avatar';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -10,15 +11,16 @@ import Button from '../../components/ui/Button';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
-import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
-import { confirmAction } from '../../utils/alert';
+import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
+import { confirmAction, notify } from '../../utils/alert';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [skillCount, setSkillCount] = useState(0);
   const [interests, setInterests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -43,13 +45,53 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleChangeAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      notify('Photo access needed', 'Allow photo library access in Settings to set a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled) return;
+
+    const asset = result.assets[0];
+    setUploadingAvatar(true);
+    try {
+      const updated = await api.uploadAvatar({
+        userId: user.user_id,
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+      });
+      updateUser(updated);
+    } catch (err) {
+      notify('Could not update your photo', err.message ?? 'Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner label="Loading your profile…" />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Avatar uri={user?.avatar} name={user?.name} size={84} />
+          <Pressable onPress={handleChangeAvatar} disabled={uploadingAvatar} style={styles.avatarWrap}>
+            <Avatar uri={user?.avatar} name={user?.name} size={84} />
+            <View style={styles.avatarBadge}>
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Ionicons name="camera" size={14} color={COLORS.white} />
+              )}
+            </View>
+          </Pressable>
           <Text style={styles.name}>{user?.name}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
@@ -83,7 +125,13 @@ export default function ProfileScreen() {
 
         <View style={styles.menu}>
           <MenuRow icon="ribbon-outline" label="My Skills" onPress={() => router.push('/skills/my-skills')} />
+          <MenuRow icon="calendar-outline" label="My Sessions" onPress={() => router.push('/sessions')} />
           <MenuRow icon="mail-outline" label="Requests" onPress={() => router.push('/requests')} />
+          <MenuRow
+            icon="options-outline"
+            label="Skill Match Style"
+            onPress={() => router.push('/(onboarding)/style')}
+          />
           <MenuRow icon="wallet-outline" label="Wallet" onPress={() => router.push('/(tabs)/wallet')} />
           <MenuRow icon="star-outline" label="Reviews about me" onPress={() => {}} />
           <MenuRow icon="settings-outline" label="Settings" onPress={() => router.push('/settings')} />
@@ -127,6 +175,22 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: SPACING.lg,
+  },
+  avatarWrap: {
+    position: 'relative',
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: RADII.round,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   name: {
     fontSize: FONT_SIZES.xl,
