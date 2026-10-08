@@ -1,40 +1,53 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, FlatList, StyleSheet, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
+import useFocusRefetch from '../../hooks/useFocusRefetch';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function MySkillsScreen() {
   const { user } = useAuth();
-  const [skills, setSkills] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!user) return;
-    const data = await api.getSkillsByUser(user.user_id);
-    setSkills(data);
-    setLoading(false);
-  }, [user]);
+  const {
+    data: skills = [],
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['skills', user?.user_id],
+    queryFn: () => api.getSkillsByUser(user.user_id),
+    enabled: Boolean(user),
+  });
+  useFocusRefetch(refetch, Boolean(user));
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
-  if (loading) return <LoadingSpinner label="Loading your skills…" />;
+  if (isPending) return <LoadingSpinner label="Loading your skills…" />;
+  if (error) return <ErrorState error={error} onRetry={refetch} />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Skills</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          My Skills
+        </Text>
         <Button
           title="Add"
           variant="secondary"
@@ -48,17 +61,35 @@ export default function MySkillsScreen() {
         data={skills}
         keyExtractor={(item) => item.skill_id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>You haven't listed any skills yet.</Text>
-            <Button title="List your first skill" fullWidth={false} onPress={() => router.push('/skills/add')} />
+            <Text style={styles.emptyText} accessible>
+              You haven't listed any skills yet.
+            </Text>
+            <Button
+              title="List your first skill"
+              fullWidth={false}
+              onPress={() => router.push('/skills/add')}
+            />
           </View>
         }
         renderItem={({ item }) => (
           <Card onPress={() => router.push(`/skills/${item.skill_id}`)} style={styles.card}>
             <Badge label={item.category} />
             <Text style={styles.skillTitle}>{item.title}</Text>
-            <Text style={styles.skillDescription} numberOfLines={2}>{item.description}</Text>
+            <Text style={styles.skillDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
           </Card>
         )}
       />

@@ -1204,3 +1204,212 @@ create policy "Users can update their own avatar"
 create policy "Users can delete their own avatar"
   on storage.objects for delete
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------
+-- messages — direct in-app messaging between matched users
+-- ---------------------------------------------------------
+create table public.messages (
+  message_id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.matches(match_id) on delete cascade,
+  sender_id uuid not null references public.users(user_id) on delete cascade,
+  content text not null check (char_length(trim(content)) > 0 and char_length(content) <= 2000),
+  created_at timestamptz not null default now()
+);
+
+create index messages_match_id_idx on public.messages(match_id);
+create index messages_sender_id_idx on public.messages(sender_id);
+create index messages_match_created_idx on public.messages(match_id, created_at asc);
+
+alter table public.messages enable row level security;
+
+create policy "Match participants can read messages"
+  on public.messages for select
+  using (
+    exists (
+      select 1 from public.matches m
+      where m.match_id = messages.match_id
+        and (m.user_id_1 = auth.uid() or m.user_id_2 = auth.uid())
+    )
+  );
+
+create policy "Match participants can insert messages"
+  on public.messages for insert
+  with check (
+    sender_id = auth.uid()
+    and exists (
+      select 1 from public.matches m
+      where m.match_id = messages.match_id
+        and (m.user_id_1 = auth.uid() or m.user_id_2 = auth.uid())
+    )
+  );
+
+-- ---------------------------------------------------------
+-- bounties — reverse bounty board for urgent learning requests
+-- ---------------------------------------------------------
+create table public.bounties (
+  bounty_id uuid primary key default gen_random_uuid(),
+  creator_id uuid not null references public.users(user_id) on delete cascade,
+  title text not null check (char_length(trim(title)) >= 5 and char_length(title) <= 120),
+  description text not null check (char_length(trim(description)) >= 10),
+  category text not null,
+  reward_type text not null default 'token' check (reward_type in ('token', 'swap')),
+  token_amount integer not null default 1 check (token_amount >= 1),
+  urgency text not null default 'flexible' check (urgency in ('urgent', 'this_week', 'flexible')),
+  status text not null default 'open' check (status in ('open', 'in_progress', 'completed', 'cancelled')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.bounty_offers (
+  offer_id uuid primary key default gen_random_uuid(),
+  bounty_id uuid not null references public.bounties(bounty_id) on delete cascade,
+  helper_id uuid not null references public.users(user_id) on delete cascade,
+  message text,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz not null default now(),
+  constraint bounty_offers_unique_helper unique (bounty_id, helper_id)
+);
+
+create index bounties_creator_id_idx on public.bounties(creator_id);
+create index bounties_category_idx on public.bounties(category);
+create index bounties_status_idx on public.bounties(status);
+create index bounties_created_at_idx on public.bounties(created_at desc);
+create index bounty_offers_bounty_id_idx on public.bounty_offers(bounty_id);
+create index bounty_offers_helper_id_idx on public.bounty_offers(helper_id);
+
+alter table public.bounties enable row level security;
+alter table public.bounty_offers enable row level security;
+
+create policy "Anyone authenticated can view bounties"
+  on public.bounties for select
+  using (true);
+
+create policy "Users can create their own bounties"
+  on public.bounties for insert
+  with check (auth.uid() = creator_id);
+
+create policy "Creators can update their bounties"
+  on public.bounties for update
+  using (auth.uid() = creator_id);
+
+create policy "Creators can delete their bounties"
+  on public.bounties for delete
+  using (auth.uid() = creator_id);
+
+create policy "Creators and helpers can view offers"
+  on public.bounty_offers for select
+  using (
+    auth.uid() = helper_id or
+    exists (
+      select 1 from public.bounties b
+      where b.bounty_id = bounty_offers.bounty_id and b.creator_id = auth.uid()
+    )
+  );
+
+create policy "Users can make an offer if not the creator"
+  on public.bounty_offers for insert
+  with check (
+    auth.uid() = helper_id and
+    exists (
+      select 1 from public.bounties b
+      where b.bounty_id = bounty_offers.bounty_id and b.creator_id <> auth.uid()
+    )
+  );
+
+create policy "Creators can update offer status"
+  on public.bounty_offers for update
+  using (
+    exists (
+      select 1 from public.bounties b
+      where b.bounty_id = bounty_offers.bounty_id and b.creator_id = auth.uid()
+    )
+  );
+
+-- ---------------------------------------------------------
+-- Skill Passport & Gamification (Streaks + XP)
+-- ---------------------------------------------------------
+alter table public.users add column if not exists xp integer not null default 0 check (xp >= 0);
+alter table public.users add column if not exists streak_weeks integer not null default 0 check (streak_weeks >= 0);
+alter table public.users add column if not exists last_active_week text;
+
+create table if not exists public.endorsements (
+  endorsement_id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.sessions(session_id) on delete cascade,
+  reviewer_id uuid not null references public.users(user_id) on delete cascade,
+  reviewee_id uuid not null references public.users(user_id) on delete cascade,
+  badge_key text not null,
+  created_at timestamptz not null default now(),
+  constraint endorsements_distinct_parties check (reviewer_id <> reviewee_id),
+  constraint endorsements_unique_per_session unique (session_id, reviewer_id, badge_key)
+);
+
+create index if not exists endorsements_reviewee_id_idx on public.endorsements(reviewee_id);
+create index if not exists endorsements_badge_key_idx on public.endorsements(badge_key);
+
+alter table public.endorsements enable row level security;
+
+create policy "Anyone authenticated can view endorsements"
+  on public.endorsements for select
+  using (true);
+
+create policy "Users can give endorsements"
+  on public.endorsements for insert
+  with check (auth.uid() = reviewer_id);
+
+create or replace function public.award_xp_and_streak(
+  p_user_id uuid,
+  p_xp_amount integer
+)
+returns table (new_xp integer, new_streak integer, level integer)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_current_week text := to_char(now(), 'IYYY-"W"IW');
+  v_last_week text;
+  v_curr_xp integer;
+  v_curr_streak integer;
+  v_prev_week text := to_char(now() - interval '7 days', 'IYYY-"W"IW');
+  v_new_streak integer;
+begin
+  select xp, streak_weeks, last_active_week
+  into v_curr_xp, v_curr_streak, v_last_week
+  from public.users
+  where user_id = p_user_id for update;
+
+  if not found then
+    raise exception 'User not found';
+  end if;
+
+  if v_last_week is null then
+    v_new_streak := 1;
+  elsif v_last_week = v_current_week then
+    v_new_streak := greatest(1, v_curr_streak);
+  elsif v_last_week = v_prev_week then
+    v_new_streak := v_curr_streak + 1;
+  else
+    v_new_streak := 1;
+  end if;
+
+  update public.users
+  set xp = xp + p_xp_amount,
+      streak_weeks = v_new_streak,
+      last_active_week = v_current_week
+  where user_id = p_user_id
+  returning xp, streak_weeks into v_curr_xp, v_curr_streak;
+
+  return query select
+    v_curr_xp,
+    v_curr_streak,
+    case
+      when v_curr_xp < 200 then 1
+      when v_curr_xp < 500 then 2
+      when v_curr_xp < 1000 then 3
+      when v_curr_xp < 2000 then 4
+      else 5
+    end;
+end;
+$$;
+
+

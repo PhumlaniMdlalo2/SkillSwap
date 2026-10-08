@@ -1,7 +1,9 @@
 import { supabase } from './supabase';
 
 export async function getSkills({ category, search } = {}) {
-  let query = supabase.from('skills').select('*, teacher:user_id(name, avatar, rating, review_count)');
+  let query = supabase
+    .from('skills')
+    .select('*, teacher:user_id(name, avatar, rating, review_count)');
   if (category) query = query.eq('category', category);
   if (search) query = query.ilike('title', `%${search}%`);
   const { data, error } = await query;
@@ -20,10 +22,7 @@ export async function getSkillById(skillId) {
 }
 
 export async function getSkillsByUser(userId) {
-  const { data, error } = await supabase
-    .from('skills')
-    .select('*')
-    .eq('user_id', userId);
+  const { data, error } = await supabase.from('skills').select('*').eq('user_id', userId);
   if (error) throw error;
   return data;
 }
@@ -77,7 +76,10 @@ export async function addAvailability({ userId, skillId, startTime, endTime }) {
 }
 
 export async function deleteAvailability(availabilityId) {
-  const { error } = await supabase.from('availability').delete().eq('availability_id', availabilityId);
+  const { error } = await supabase
+    .from('availability')
+    .delete()
+    .eq('availability_id', availabilityId);
   if (error) throw error;
   return true;
 }
@@ -144,6 +146,18 @@ export async function getSessionsForUser(userId) {
   }));
 }
 
+export async function getSessionById(sessionId) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, availability:availability_id(skill:skill_id(title))')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const { availability, ...session } = data;
+  return { ...session, skill_title: availability?.skill?.title ?? 'Skill session' };
+}
+
 // Step 1: learner asks to book a skill — no time attached yet.
 export async function requestSession({ skillId, message }) {
   const { data, error } = await supabase.rpc('request_session', {
@@ -158,7 +172,9 @@ export async function requestSession({ skillId, message }) {
 export async function getRequestsForUser(userId) {
   const { data, error } = await supabase
     .from('session_requests')
-    .select('*, skill:skill_id(title, category), teacher:teacher_id(name, avatar), learner:learner_id(name, avatar)')
+    .select(
+      '*, skill:skill_id(title, category), teacher:teacher_id(name, avatar), learner:learner_id(name, avatar)',
+    )
     .or(`teacher_id.eq.${userId},learner_id.eq.${userId}`)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -168,7 +184,9 @@ export async function getRequestsForUser(userId) {
 export async function getRequestById(requestId) {
   const { data, error } = await supabase
     .from('session_requests')
-    .select('*, skill:skill_id(title, category), teacher:teacher_id(name, avatar), learner:learner_id(name, avatar)')
+    .select(
+      '*, skill:skill_id(title, category), teacher:teacher_id(name, avatar), learner:learner_id(name, avatar)',
+    )
     .eq('request_id', requestId)
     .maybeSingle();
   if (error) throw error;
@@ -227,7 +245,13 @@ export async function getReviewsForUser(userId) {
 export async function addReview({ sessionId, reviewerId, revieweeId, rating, comment }) {
   const { data, error } = await supabase
     .from('reviews')
-    .insert({ session_id: sessionId, reviewer_id: reviewerId, reviewee_id: revieweeId, rating, comment })
+    .insert({
+      session_id: sessionId,
+      reviewer_id: reviewerId,
+      reviewee_id: revieweeId,
+      rating,
+      comment,
+    })
     .select()
     .single();
   if (error) throw error;

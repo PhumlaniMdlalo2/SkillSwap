@@ -8,7 +8,7 @@ export function useSwipeAnimation({ gestureState, cardWidth }) {
       translateX.value,
       [-cardWidth, 0, cardWidth],
       [-12, 0, 12],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     );
     return {
       transform: [
@@ -28,7 +28,11 @@ export function useSwipeAnimation({ gestureState, cardWidth }) {
   }));
 
   function resetAnimation() {
+    // Shared values are reactive cells, not component state — mutating them
+    // from a parent-provided object is exactly how Reanimated is meant to work.
+    // eslint-disable-next-line react-hooks/immutability
     translateX.value = 0;
+    // eslint-disable-next-line react-hooks/immutability
     translateY.value = 0;
   }
 

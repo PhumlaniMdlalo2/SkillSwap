@@ -7,7 +7,7 @@ import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 export default function SwapEmptyState({ onRefresh, onUndo, canUndo }) {
   return (
     <View style={styles.container}>
-      <View style={styles.iconWrap}>
+      <View style={styles.iconWrap} accessibilityElementsHidden importantForAccessibility="no">
         <Ionicons name="sparkles-outline" size={36} color={COLORS.primary} />
       </View>
       <Text style={styles.title}>No more profiles</Text>

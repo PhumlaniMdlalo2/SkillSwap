@@ -1,19 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Avatar from '../../components/ui/Avatar';
 import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
-import { COLORS, SPACING, FONT_SIZES, RADII, DEFAULT_SESSION_TOKEN_COST } from '../../utils/constants';
+import {
+  COLORS,
+  SPACING,
+  FONT_SIZES,
+  RADII,
+  DEFAULT_SESSION_TOKEN_COST,
+} from '../../utils/constants';
 import { formatTime, groupSlotsByDay } from '../../utils/helpers';
 import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 
 const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 const DAYS = [
@@ -43,10 +60,7 @@ function emptyWeeklyHours() {
 export default function SkillDetailScreen() {
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
-
-  const [skill, setSkill] = useState(null);
-  const [availability, setAvailability] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const [weeklyHours, setWeeklyHours] = useState(emptyWeeklyHours);
   const [hoursLoaded, setHoursLoaded] = useState(false);
@@ -54,38 +68,55 @@ export default function SkillDetailScreen() {
 
   const [message, setMessage] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const {
+    data: skill,
+    isPending: skillPending,
+    error: skillError,
+    refetch: refetchSkill,
+  } = useQuery({
+    queryKey: ['skill', id],
+    queryFn: () => api.getSkillById(id),
+    enabled: Boolean(user) && Boolean(id),
+  });
 
   const isOwner = Boolean(user && skill && skill.user_id === user.user_id);
 
-  const load = () => {
-    Promise.all([
-      api.getSkillById(id),
-      isOwner ? api.getAllAvailabilityForSkill(id) : Promise.resolve([]),
-      isOwner ? api.getAvailabilityHours(id) : Promise.resolve([]),
-    ])
-      .then(([skillData, slots, hours]) => {
-        setSkill(skillData);
-        setAvailability(slots);
-        if (isOwner) {
-          const next = emptyWeeklyHours();
-          hours.forEach((h) => {
-            next[h.day_of_week] = {
-              open: true,
-              startHour: parseHour(h.start_time),
-              endHour: parseHour(h.end_time),
-            };
-          });
-          setWeeklyHours(next);
-          setHoursLoaded(true);
-        }
-      })
-      .finally(() => setLoading(false));
-  };
+  const {
+    data: availability = [],
+    isPending: availabilityPending,
+    error: availabilityError,
+    refetch: refetchAvailability,
+  } = useQuery({
+    queryKey: ['availability', id],
+    queryFn: () => api.getAllAvailabilityForSkill(id),
+    enabled: isOwner,
+  });
+
+  const {
+    data: hoursData,
+    error: hoursError,
+    refetch: refetchHours,
+  } = useQuery({
+    queryKey: ['availability-hours', id],
+    queryFn: () => api.getAvailabilityHours(id),
+    enabled: isOwner,
+  });
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, isOwner]);
+    if (!isOwner || !hoursData) return;
+    const next = emptyWeeklyHours();
+    hoursData.forEach((h) => {
+      next[h.day_of_week] = {
+        open: true,
+        startHour: parseHour(h.start_time),
+        endHour: parseHour(h.end_time),
+      };
+    });
+    setWeeklyHours(next);
+    setHoursLoaded(true);
+  }, [isOwner, hoursData]);
 
   // Keeps the rolling booking window advancing every time the teacher opens
   // this page, without needing a cron job — generation is idempotent
@@ -95,10 +126,12 @@ export default function SkillDetailScreen() {
     if (!isOwner || !skill?.skill_id) return;
     api
       .generateAvailabilitySlots(skill.skill_id)
-      .then(() => api.getAllAvailabilityForSkill(skill.skill_id))
-      .then(setAvailability)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['availability'] });
+        queryClient.invalidateQueries({ queryKey: ['availability-hours'] });
+      })
       .catch(() => {});
-  }, [isOwner, skill?.skill_id]);
+  }, [isOwner, skill?.skill_id, queryClient]);
 
   const handleRequest = async () => {
     setRequesting(true);
@@ -110,10 +143,10 @@ export default function SkillDetailScreen() {
       notify(
         'Request sent!',
         `${skill.teacher?.name ?? 'The teacher'} will review your request. You'll be able to pick a time once they accept.`,
-        () => router.push('/requests')
+        () => router.push('/requests'),
       );
     } catch (err) {
-      notify('Could not send request', err.message ?? 'Please try again.');
+      notify('Could not send request', toUserMessage(err));
     } finally {
       setRequesting(false);
     }
@@ -129,7 +162,8 @@ export default function SkillDetailScreen() {
   const handleChangeStartHour = (dayValue, hour) => {
     setWeeklyHours((prev) => {
       const day = prev[dayValue];
-      const endHour = hour >= day.endHour ? Math.min(hour + 1, HOURS[HOURS.length - 1]) : day.endHour;
+      const endHour =
+        hour >= day.endHour ? Math.min(hour + 1, HOURS[HOURS.length - 1]) : day.endHour;
       return { ...prev, [dayValue]: { ...day, startHour: hour, endHour } };
     });
   };
@@ -151,10 +185,11 @@ export default function SkillDetailScreen() {
         end_time: `${weeklyHours[d.value].endHour}:00:00`,
       }));
       await api.setAvailabilityHours({ skillId: skill.skill_id, hours });
-      setAvailability(await api.getAllAvailabilityForSkill(skill.skill_id));
+      await queryClient.invalidateQueries({ queryKey: ['availability'] });
+      await queryClient.invalidateQueries({ queryKey: ['availability-hours'] });
       notify('Hours saved', 'Your weekly availability has been updated.');
     } catch (err) {
-      notify('Could not save your hours', err.message ?? 'Please try again.');
+      notify('Could not save your hours', toUserMessage(err));
     } finally {
       setSavingHours(false);
     }
@@ -163,13 +198,28 @@ export default function SkillDetailScreen() {
   const handleDeleteSlot = async (availabilityId) => {
     try {
       await api.deleteAvailability(availabilityId);
-      setAvailability((prev) => prev.filter((a) => a.availability_id !== availabilityId));
+      await queryClient.invalidateQueries({ queryKey: ['availability'] });
+      await queryClient.invalidateQueries({ queryKey: ['availability-hours'] });
     } catch (err) {
-      notify('Could not remove this time slot', err.message ?? 'Please try again.');
+      notify('Could not remove this time slot', toUserMessage(err));
     }
   };
 
-  if (loading) return <LoadingSpinner label="Loading skill…" />;
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      if (isOwner) {
+        await Promise.all([refetchSkill(), refetchAvailability(), refetchHours()]);
+      } else {
+        await refetchSkill();
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (skillPending) return <LoadingSpinner label="Loading skill…" />;
+  if (skillError) return <ErrorState error={skillError} onRetry={refetchSkill} />;
   if (!skill) {
     return (
       <SafeAreaView style={styles.container}>
@@ -177,15 +227,42 @@ export default function SkillDetailScreen() {
       </SafeAreaView>
     );
   }
+  if (isOwner && (hoursError || availabilityError)) {
+    return (
+      <ErrorState
+        error={hoursError ?? availabilityError}
+        onRetry={() => (hoursError ? refetchHours() : refetchAvailability())}
+      />
+    );
+  }
+  if (isOwner && (!hoursLoaded || availabilityPending))
+    return <LoadingSpinner label="Loading skill…" />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
+      >
         <Badge label={skill.category} />
-        <Text style={styles.title}>{skill.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          {skill.title}
+        </Text>
 
         {!isOwner && (
-          <Card onPress={() => router.push(`/profile/${skill.teacher?.user_id}`)} style={styles.teacherCard}>
+          <Card
+            onPress={() => router.push(`/profile/${skill.teacher?.user_id}`)}
+            style={styles.teacherCard}
+          >
             <Avatar uri={skill.teacher?.avatar} name={skill.teacher?.name} size={48} />
             <View style={{ flex: 1 }}>
               <Text style={styles.teacherName}>{skill.teacher?.name}</Text>
@@ -215,9 +292,16 @@ export default function SkillDetailScreen() {
                       <Text style={styles.dayLabel}>{day.label}</Text>
                       <Pressable
                         onPress={() => handleToggleDay(day.value)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: dayHours.open }}
                         style={[styles.dayTogglePill, dayHours.open && styles.dayTogglePillActive]}
                       >
-                        <Text style={[styles.dayToggleText, dayHours.open && styles.dayToggleTextActive]}>
+                        <Text
+                          style={[
+                            styles.dayToggleText,
+                            dayHours.open && styles.dayToggleTextActive,
+                          ]}
+                        >
                           {dayHours.open ? 'Open' : 'Closed'}
                         </Text>
                       </Pressable>
@@ -227,16 +311,24 @@ export default function SkillDetailScreen() {
                       <View style={styles.dayHourPickers}>
                         <View style={styles.dayHourGroup}>
                           <Text style={styles.dayHourLabel}>Start</Text>
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.chipRow}
+                          >
                             {HOURS.map((hour) => {
                               const active = hour === dayHours.startHour;
                               return (
                                 <Pressable
                                   key={hour}
                                   onPress={() => handleChangeStartHour(day.value, hour)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: active }}
                                   style={[styles.chip, active && styles.chipActive]}
                                 >
-                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{formatHour(hour)}</Text>
+                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                    {formatHour(hour)}
+                                  </Text>
                                 </Pressable>
                               );
                             })}
@@ -244,16 +336,24 @@ export default function SkillDetailScreen() {
                         </View>
                         <View style={styles.dayHourGroup}>
                           <Text style={styles.dayHourLabel}>End</Text>
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.chipRow}
+                          >
                             {HOURS.map((hour) => {
                               const active = hour === dayHours.endHour;
                               return (
                                 <Pressable
                                   key={hour}
                                   onPress={() => handleChangeEndHour(day.value, hour)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: active }}
                                   style={[styles.chip, active && styles.chipActive]}
                                 >
-                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{formatHour(hour)}</Text>
+                                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                    {formatHour(hour)}
+                                  </Text>
                                 </Pressable>
                               );
                             })}
@@ -267,22 +367,28 @@ export default function SkillDetailScreen() {
             </View>
 
             {hoursLoaded && Object.values(weeklyHours).every((d) => !d.open) && (
-              <Text style={styles.emptyText}>
+              <Text style={styles.emptyText} accessible>
                 You haven't set any open hours yet — toggle a day on above to get started.
               </Text>
             )}
 
             <Text style={styles.hintText}>
-              Turning off a day won't remove times you've already opened — delete individual slots below if you no
-              longer need one.
+              Turning off a day won't remove times you've already opened — delete individual slots
+              below if you no longer need one.
             </Text>
 
-            <Button title="Save Hours" onPress={handleSaveHours} loading={savingHours} style={{ marginTop: SPACING.sm }} />
+            <Button
+              title="Save Hours"
+              onPress={handleSaveHours}
+              loading={savingHours}
+              style={{ marginTop: SPACING.sm }}
+            />
 
             <Text style={[styles.sectionTitle, { marginTop: SPACING.lg }]}>Open times</Text>
             {availability.length === 0 ? (
-              <Text style={styles.emptyText}>
-                You haven't added any availability yet. Set your hours above to let learners know when you're free.
+              <Text style={styles.emptyText} accessible>
+                You haven't added any availability yet. Set your hours above to let learners know
+                when you're free.
               </Text>
             ) : (
               groupSlotsByDay(availability).map((group) => (
@@ -290,14 +396,33 @@ export default function SkillDetailScreen() {
                   <Text style={styles.dayGroupHeader}>{group.label}</Text>
                   <View style={styles.slotChipRow}>
                     {group.slots.map((slot) => (
-                      <View key={slot.availability_id} style={[styles.slotChip, slot.booked && styles.slotChipBooked]}>
-                        <Text style={[styles.slotChipText, slot.booked && styles.slotChipTextBooked]}>
+                      <View
+                        key={slot.availability_id}
+                        style={[styles.slotChip, slot.booked && styles.slotChipBooked]}
+                      >
+                        <Text
+                          style={[styles.slotChipText, slot.booked && styles.slotChipTextBooked]}
+                          accessibilityLabel={
+                            slot.booked ? `${formatTime(slot.start_time)}, booked` : undefined
+                          }
+                        >
                           {formatTime(slot.start_time)}
                         </Text>
                         {slot.booked ? (
-                          <Ionicons name="lock-closed" size={12} color={COLORS.token} style={{ marginLeft: 4 }} />
+                          <Ionicons
+                            name="lock-closed"
+                            size={12}
+                            color={COLORS.token}
+                            style={{ marginLeft: 4 }}
+                          />
                         ) : (
-                          <Pressable onPress={() => handleDeleteSlot(slot.availability_id)} hitSlop={8} style={{ marginLeft: 4 }}>
+                          <Pressable
+                            onPress={() => handleDeleteSlot(slot.availability_id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${formatTime(slot.start_time)} slot`}
+                            hitSlop={12}
+                            style={{ marginLeft: 4 }}
+                          >
                             <Ionicons name="close-circle" size={16} color={COLORS.danger} />
                           </Pressable>
                         )}
@@ -320,8 +445,8 @@ export default function SkillDetailScreen() {
                 <Ionicons name="calendar-outline" size={28} color={COLORS.primary} />
               </View>
               <Text style={styles.requestHint}>
-                Send a request to {skill.teacher?.name ?? 'the teacher'}. Once they accept, you'll pick one or more
-                consecutive hours from their open availability.
+                Send a request to {skill.teacher?.name ?? 'the teacher'}. Once they accept, you'll
+                pick one or more consecutive hours from their open availability.
               </Text>
               <Input
                 placeholder="Add a note (optional) — what would you like to focus on?"

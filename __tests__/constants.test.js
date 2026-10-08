@@ -17,7 +17,7 @@ describe('COLORS', () => {
   });
 
   it('exposes common semantic colors', () => {
-    expect(COLORS.danger).toBe('#E74C3C');
+    expect(COLORS.danger).toBe('#D64034');
     expect(COLORS.success).toBe('#00B894');
     expect(COLORS.white).toBe('#FFFFFF');
   });
@@ -30,6 +30,41 @@ describe('COLORS', () => {
         expect(value).toMatch(/^#[0-9A-F]{6}$/i);
       }
     });
+  });
+});
+
+describe('color contrast (WCAG AA)', () => {
+  const channel = (value) => {
+    const s = value / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+
+  const luminance = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (
+      0.2126 * channel((n >> 16) & 255) +
+      0.7152 * channel((n >> 8) & 255) +
+      0.0722 * channel(n & 255)
+    );
+  };
+
+  const ratio = (a, b) => {
+    const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (light + 0.05) / (dark + 0.05);
+  };
+
+  const pairs = [
+    ['muted text on background', COLORS.textMuted, COLORS.background],
+    ['muted text on surface', COLORS.textMuted, COLORS.surface],
+    ['faint text on background', COLORS.textFaint, COLORS.background],
+    ['faint text on surface', COLORS.textFaint, COLORS.surface],
+    ['body text on background', COLORS.text, COLORS.background],
+    ['white on primary', COLORS.white, COLORS.primary],
+    ['white on danger', COLORS.white, COLORS.danger],
+  ];
+
+  it.each(pairs)('%s meets 4.5:1', (label, fg, bg) => {
+    expect(ratio(fg, bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

@@ -1,16 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import QRCodeDisplay from '../../components/sessions/QRCodeDisplay';
+import AddToCalendarModal from '../../components/sessions/AddToCalendarModal';
 import { useAuth, useWallet } from '../../store/useAppHooks';
 import * as api from '../../services/api';
+import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, SESSION_STATUS_LABELS } from '../../utils/constants';
 import { formatDate, formatTime, formatDuration } from '../../utils/helpers';
 import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 
 const STATUS_TONE = { pending: 'warning', completed: 'success', cancelled: 'danger' };
 
@@ -18,22 +23,33 @@ export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
   const { refresh: refreshWallet } = useWallet();
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
 
-  const load = async () => {
-    const sessions = await api.getSessionsForUser(user.user_id);
-    setSession(sessions.find((s) => s.session_id === id) ?? null);
-    setLoading(false);
+  const {
+    data: session,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['session', id],
+    queryFn: () => api.getSessionById(id),
+    enabled: Boolean(user) && Boolean(id),
+  });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  if (loading) return <LoadingSpinner label="Loading session…" />;
+  if (isPending) return <LoadingSpinner label="Loading session…" />;
+  if (error) return <ErrorState error={error} onRetry={refetch} />;
   if (!session) {
     return (
       <SafeAreaView style={styles.container}>
@@ -48,11 +64,21 @@ export default function SessionDetailScreen() {
     setBusy(true);
     try {
       await api.completeSession(session.session_id);
+      try {
+        await gamificationService.awardXpAndStreak(user.user_id, 100);
+      } catch (_xpErr) {
+        // Non-blocking gamification award
+      }
+      await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      await queryClient.invalidateQueries({ queryKey: ['session', id] });
+      await queryClient.invalidateQueries({ queryKey: ['user-stats'] });
       await refreshWallet();
-      await load();
-      notify('Session completed', 'You just earned a time token!');
+      notify(
+        'Session completed! 🎉',
+        'You earned +100 XP, extended your weekly streak, and earned a time token!',
+      );
     } catch (err) {
-      notify('Could not complete session', err.message ?? 'Please try again.');
+      notify('Could not complete session', toUserMessage(err));
     } finally {
       setBusy(false);
     }
@@ -62,9 +88,11 @@ export default function SessionDetailScreen() {
     setBusy(true);
     try {
       await api.cancelSession(session.session_id);
-      await load();
+      await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      await queryClient.invalidateQueries({ queryKey: ['session', id] });
+      await refreshWallet();
     } catch (err) {
-      notify('Could not cancel session', err.message ?? 'Please try again.');
+      notify('Could not cancel session', toUserMessage(err));
     } finally {
       setBusy(false);
     }
@@ -72,13 +100,33 @@ export default function SessionDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Badge label={SESSION_STATUS_LABELS[session.status] ?? session.status} tone={STATUS_TONE[session.status]} />
-        <Text style={styles.title}>{session.skill_title}</Text>
-        <Text style={styles.meta}>
-          {formatDate(session.session_date)} · {formatTime(session.session_date)} · {formatDuration(session.duration)}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
+      >
+        <Badge
+          label={SESSION_STATUS_LABELS[session.status] ?? session.status}
+          tone={STATUS_TONE[session.status]}
+        />
+        <Text style={styles.title} accessibilityRole="header">
+          {session.skill_title}
         </Text>
-        <Text style={styles.role}>You are the {isTeacher ? 'teacher' : 'learner'} for this session.</Text>
+        <Text style={styles.meta}>
+          {formatDate(session.session_date)} · {formatTime(session.session_date)} ·{' '}
+          {formatDuration(session.duration)}
+        </Text>
+        <Text style={styles.role}>
+          You are the {isTeacher ? 'teacher' : 'learner'} for this session.
+        </Text>
 
         {session.status === 'pending' && (
           <View style={styles.qrSection}>
@@ -88,6 +136,11 @@ export default function SessionDetailScreen() {
 
         {session.status === 'pending' && (
           <View style={styles.actions}>
+            <Button
+              title="Add to Calendar 📅"
+              variant="secondary"
+              onPress={() => setShowCalendarModal(true)}
+            />
             {isTeacher && (
               <Button title="Mark as Completed" onPress={handleComplete} loading={busy} />
             )}
@@ -103,6 +156,13 @@ export default function SessionDetailScreen() {
           />
         )}
       </ScrollView>
+
+      <AddToCalendarModal
+        visible={showCalendarModal}
+        onClose={() => setShowCalendarModal(false)}
+        session={session}
+        isTeacher={isTeacher}
+      />
     </SafeAreaView>
   );
 }

@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import * as authService from '../services/auth';
+import { toUserMessage } from '../utils/errors';
 
 export const AuthContext = createContext(null);
 
@@ -41,7 +42,7 @@ export function AuthProvider({ children }) {
       setUser(loggedInUser);
       return loggedInUser;
     } catch (error) {
-      setAuthError(error.message ?? 'Unable to log in.');
+      setAuthError(toUserMessage(error, 'Unable to log in.'));
       throw error;
     }
   }, []);
@@ -53,7 +54,7 @@ export function AuthProvider({ children }) {
       setUser(newUser);
       return newUser;
     } catch (error) {
-      setAuthError(error.message ?? 'Unable to register.');
+      setAuthError(toUserMessage(error, 'Unable to register.'));
       throw error;
     }
   }, []);
@@ -81,7 +82,7 @@ export function AuthProvider({ children }) {
       logout,
       updateUser,
     }),
-    [user, initializing, authError, login, register, logout, updateUser]
+    [user, initializing, authError, login, register, logout, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

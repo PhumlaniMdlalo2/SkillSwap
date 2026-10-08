@@ -1,25 +1,46 @@
-import React, { useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../components/ui/Card';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import { useWallet } from '../../store/useAppHooks';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 import { formatTokens, formatDate } from '../../utils/helpers';
 
 export default function WalletScreen() {
-  const { balance, transactions, loading, refresh } = useWallet();
+  const { balance, transactions, loading, error, refresh } = useWallet();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loading && transactions.length === 0) {
     return <LoadingSpinner label="Loading your wallet…" />;
   }
+
+  if (error) return <ErrorState error={error} onRetry={refresh} />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -44,6 +65,15 @@ export default function WalletScreen() {
         data={transactions.slice(0, 8)}
         keyExtractor={(item) => item.transaction_id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+            />
+          )
+        }
         ListEmptyComponent={<Text style={styles.emptyText}>No transactions yet.</Text>}
         renderItem={({ item }) => <TransactionRow transaction={item} />}
       />
@@ -55,7 +85,12 @@ function TransactionRow({ transaction }) {
   const isEarn = transaction.type === 'earn';
   return (
     <Card style={styles.txCard}>
-      <View style={[styles.txIcon, { backgroundColor: isEarn ? COLORS.secondaryLight : COLORS.dangerLight }]}>
+      <View
+        style={[
+          styles.txIcon,
+          { backgroundColor: isEarn ? COLORS.secondaryLight : COLORS.dangerLight },
+        ]}
+      >
         <Ionicons
           name={isEarn ? 'arrow-down' : 'arrow-up'}
           size={16}
@@ -63,7 +98,9 @@ function TransactionRow({ transaction }) {
         />
       </View>
       <View style={styles.txInfo}>
-        <Text style={styles.txDescription} numberOfLines={1}>{transaction.description}</Text>
+        <Text style={styles.txDescription} numberOfLines={1}>
+          {transaction.description}
+        </Text>
         <Text style={styles.txDate}>{formatDate(transaction.created_at)}</Text>
       </View>
       <Text style={[styles.txAmount, { color: isEarn ? COLORS.secondary : COLORS.danger }]}>

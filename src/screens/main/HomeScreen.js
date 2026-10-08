@@ -1,48 +1,77 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import TokenBalance from '../../components/wallet/TokenBalance';
 import SessionCard from '../../components/sessions/SessionCard';
+import StreakCard from '../../components/gamification/StreakCard';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
+import useFocusRefetch from '../../hooks/useFocusRefetch';
 import { useAuth, useWallet } from '../../store/useAppHooks';
 import * as api from '../../services/api';
+import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const { balance, refresh: refreshWallet } = useWallet();
-  const [sessions, setSessions] = useState([]);
-  const [pendingRequestCount, setPendingRequestCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const enabled = Boolean(user);
 
-  const load = useCallback(async () => {
-    if (!user) return;
-    const [sessionData, requests] = await Promise.all([
-      api.getSessionsForUser(user.user_id),
-      api.getRequestsForUser(user.user_id),
-    ]);
-    setSessions(sessionData.filter((s) => s.status === 'pending').slice(0, 3));
-    setPendingRequestCount(
-      requests.filter((r) => r.teacher_id === user.user_id && r.status === 'pending').length
-    );
-  }, [user]);
+  const {
+    data: sessions = [],
+    isPending,
+    error,
+    refetch: refetchSessions,
+  } = useQuery({
+    queryKey: ['sessions', user?.user_id],
+    queryFn: () => api.getSessionsForUser(user.user_id),
+    enabled,
+    select: (all) => all.filter((s) => s.status === 'pending').slice(0, 3),
+  });
 
-  useEffect(() => {
-    load().finally(() => setLoading(false));
-  }, [load]);
+  const { data: pendingRequestCount = 0, refetch: refetchRequests } = useQuery({
+    queryKey: ['requests', user?.user_id],
+    queryFn: () => api.getRequestsForUser(user.user_id),
+    enabled,
+    select: (all) =>
+      all.filter((r) => r.teacher_id === user.user_id && r.status === 'pending').length,
+  });
+
+  const { data: userStats, refetch: refetchStats } = useQuery({
+    queryKey: ['user-stats', user?.user_id],
+    queryFn: () => gamificationService.getUserStats(user.user_id),
+    enabled,
+  });
+
+  useFocusRefetch(refetchSessions, enabled);
+  useFocusRefetch(refetchRequests, enabled);
+  useFocusRefetch(refetchStats, enabled);
+
+  const { data: sessionsThisWeek = 0, refetch: refetchWeekly } = useQuery({
+    queryKey: ['sessions-this-week', user?.user_id],
+    queryFn: () => gamificationService.getSessionsThisWeek(user.user_id),
+    enabled,
+  });
+
+  useFocusRefetch(refetchWeekly, enabled);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([load(), refreshWallet()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([refetchSessions(), refetchRequests(), refreshWallet(), refetchStats(), refetchWeekly()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  if (loading) return <LoadingSpinner label="Loading your dashboard…" />;
+  if (isPending) return <LoadingSpinner label="Loading your dashboard…" />;
+  if (error) return <ErrorState error={error} onRetry={refetchSessions} />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -50,12 +79,18 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         refreshControl={
           Platform.OS === 'web' ? undefined : (
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+            />
           )
         }
       >
         <Text style={styles.greeting}>Hi {user?.name?.split(' ')[0] ?? 'there'} 👋</Text>
         <Text style={styles.subGreeting}>Here's what's happening in your skill exchange.</Text>
+
+        <StreakCard stats={userStats} sessionsThisWeek={sessionsThisWeek} />
 
         <Card style={styles.walletCard} onPress={() => router.push('/wallet/transactions')}>
           <View style={styles.walletRow}>
@@ -70,16 +105,34 @@ export default function HomeScreen() {
               <Ionicons name="mail" size={18} color={COLORS.token} />
             </View>
             <Text style={styles.requestBannerText}>
-              {pendingRequestCount} session request{pendingRequestCount === 1 ? '' : 's'} waiting on you
+              {pendingRequestCount} session request{pendingRequestCount === 1 ? '' : 's'} waiting on
+              you
             </Text>
             <Ionicons name="chevron-forward" size={18} color={COLORS.textFaint} />
           </Card>
         )}
 
         <View style={styles.quickActions}>
-          <QuickAction icon="search" label="Browse Skills" onPress={() => router.push('/(tabs)/explore')} />
-          <QuickAction icon="add-circle" label="Add a Skill" onPress={() => router.push('/skills/add')} />
-          <QuickAction icon="sparkles" label="Skill Match" onPress={() => router.push('/(tabs)/swap')} />
+          <QuickAction
+            icon="search"
+            label="Browse Skills"
+            onPress={() => router.push('/(tabs)/explore')}
+          />
+          <QuickAction
+            icon="add-circle"
+            label="Add a Skill"
+            onPress={() => router.push('/skills/add')}
+          />
+          <QuickAction
+            icon="sparkles"
+            label="Skill Match"
+            onPress={() => router.push('/(tabs)/swap')}
+          />
+          <QuickAction
+            icon="trophy"
+            label="Passport"
+            onPress={() => router.push('/passport')}
+          />
         </View>
 
         <View style={styles.sectionHeader}>

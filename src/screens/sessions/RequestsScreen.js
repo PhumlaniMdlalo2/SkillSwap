@@ -1,17 +1,21 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Avatar from '../../components/ui/Avatar';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
+import useFocusRefetch from '../../hooks/useFocusRefetch';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 import { timeAgo } from '../../utils/helpers';
 import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 
 const STATUS_TONE = {
   pending: 'warning',
@@ -38,23 +42,33 @@ const TEACHER_STATUS_LABEL = {
 
 export default function RequestsScreen() {
   const { user } = useAuth();
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [respondingId, setRespondingId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(() => {
-    if (!user) return;
-    api.getRequestsForUser(user.user_id).then((data) => {
-      setRequests(data);
-      setLoading(false);
-    });
-  }, [user]);
+  const {
+    data: requests = [],
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['requests', user?.user_id],
+    queryFn: () => api.getRequestsForUser(user.user_id),
+    enabled: Boolean(user),
+  });
+  useFocusRefetch(refetch, Boolean(user));
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (isPending) return <LoadingSpinner label="Loading requests…" />;
+  if (error) return <ErrorState error={error} onRetry={refetch} />;
 
   const toReview = requests.filter((r) => r.teacher_id === user.user_id);
   const sent = requests.filter((r) => r.learner_id === user.user_id);
@@ -63,35 +77,56 @@ export default function RequestsScreen() {
     setRespondingId(requestId);
     try {
       await api.respondToRequest({ requestId, accept });
-      load();
+      await queryClient.invalidateQueries({ queryKey: ['requests'] });
     } catch (err) {
-      notify('Could not respond to this request', err.message ?? 'Please try again.');
+      notify('Could not respond to this request', toUserMessage(err));
     } finally {
       setRespondingId(null);
     }
   };
 
-  if (loading) return <LoadingSpinner label="Loading requests…" />;
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Requests</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
+      >
+        <Text style={styles.title} accessibilityRole="header">
+          Requests
+        </Text>
 
         <Text style={styles.sectionTitle}>Requests to review</Text>
         {toReview.length === 0 ? (
-          <Text style={styles.emptyText}>No one has requested to book your skills yet.</Text>
+          <Text style={styles.emptyText} accessible>
+            No one has requested to book your skills yet.
+          </Text>
         ) : (
           toReview.map((request) => (
             <Card key={request.request_id} style={styles.requestCard}>
               <View style={styles.headerRow}>
                 <Avatar uri={request.learner?.avatar} name={request.learner?.name} size={36} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name} numberOfLines={1}>{request.learner?.name ?? 'A learner'}</Text>
-                  <Text style={styles.skillTitle} numberOfLines={1}>{request.skill?.title}</Text>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {request.learner?.name ?? 'A learner'}
+                  </Text>
+                  <Text style={styles.skillTitle} numberOfLines={1}>
+                    {request.skill?.title}
+                  </Text>
                 </View>
               </View>
-              <Badge label={TEACHER_STATUS_LABEL[request.status]} tone={STATUS_TONE[request.status]} />
+              <Badge
+                label={TEACHER_STATUS_LABEL[request.status]}
+                tone={STATUS_TONE[request.status]}
+              />
               {request.message ? <Text style={styles.message}>"{request.message}"</Text> : null}
               <Text style={styles.time}>{timeAgo(request.created_at)}</Text>
 
@@ -129,21 +164,29 @@ export default function RequestsScreen() {
 
         <Text style={styles.sectionTitle}>Your requests</Text>
         {sent.length === 0 ? (
-          <Text style={styles.emptyText}>You haven't requested to book anything yet.</Text>
+          <Text style={styles.emptyText} accessible>
+            You haven't requested to book anything yet.
+          </Text>
         ) : (
           sent.map((request) => (
             <Card
               key={request.request_id}
               style={styles.requestCard}
               onPress={
-                request.status === 'accepted' ? () => router.push(`/requests/${request.request_id}/schedule`) : undefined
+                request.status === 'accepted'
+                  ? () => router.push(`/requests/${request.request_id}/schedule`)
+                  : undefined
               }
             >
               <View style={styles.headerRow}>
                 <Avatar uri={request.teacher?.avatar} name={request.teacher?.name} size={36} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name} numberOfLines={1}>{request.teacher?.name ?? 'A teacher'}</Text>
-                  <Text style={styles.skillTitle} numberOfLines={1}>{request.skill?.title}</Text>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {request.teacher?.name ?? 'A teacher'}
+                  </Text>
+                  <Text style={styles.skillTitle} numberOfLines={1}>
+                    {request.skill?.title}
+                  </Text>
                 </View>
               </View>
               <Badge label={STATUS_LABEL[request.status]} tone={STATUS_TONE[request.status]} />

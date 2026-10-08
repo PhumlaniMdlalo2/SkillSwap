@@ -15,6 +15,7 @@ export default function Input({
     <View style={[styles.container, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
+        accessibilityLabel={label}
         placeholderTextColor={COLORS.textFaint}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -27,7 +28,11 @@ export default function Input({
         ]}
         {...textInputProps}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }

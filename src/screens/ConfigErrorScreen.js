@@ -24,10 +24,11 @@ export default function ConfigErrorScreen() {
           <Text style={styles.code}>EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key</Text>
         </View>
         <Text style={styles.body}>
-          Both values are in your Supabase dashboard under <Text style={styles.bold}>Settings → API</Text>.
-          Then run <Text style={styles.mono}>schema.sql</Text> (and the numbered migrations after it) from{' '}
-          <Text style={styles.mono}>supabase/migrations/</Text> in the SQL Editor, and restart the dev server
-          with <Text style={styles.mono}>npx expo start --clear</Text>.
+          Both values are in your Supabase dashboard under{' '}
+          <Text style={styles.bold}>Settings → API</Text>. Then run{' '}
+          <Text style={styles.mono}>schema.sql</Text> (and the numbered migrations after it) from{' '}
+          <Text style={styles.mono}>supabase/migrations/</Text> in the SQL Editor, and restart the
+          dev server with <Text style={styles.mono}>npx expo start --clear</Text>.
         </Text>
         <Text style={styles.hint}>See README.md for the full setup walkthrough.</Text>
       </ScrollView>

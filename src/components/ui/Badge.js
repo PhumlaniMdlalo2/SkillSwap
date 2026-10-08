@@ -11,8 +11,21 @@ const TONES = {
 
 export default function Badge({ label, tone = 'neutral' }) {
   const palette = TONES[tone] ?? TONES.neutral;
+  const status =
+    tone === 'warning'
+      ? 'warning'
+      : tone === 'danger'
+        ? 'danger'
+        : tone === 'success'
+          ? 'success'
+          : 'neutral';
   return (
-    <View style={[styles.badge, { backgroundColor: palette.bg }]}>
+    <View
+      style={[styles.badge, { backgroundColor: palette.bg }]}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`Status: ${status}, ${label}`}
+    >
       <Text style={[styles.label, { color: palette.fg }]} numberOfLines={1}>
         {label}
       </Text>

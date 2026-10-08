@@ -4,7 +4,13 @@ import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function LoadingSpinner({ label, fullscreen = true, size = 'large' }) {
   return (
-    <View style={fullscreen ? styles.fullscreen : styles.inline}>
+    <View
+      style={fullscreen ? styles.fullscreen : styles.inline}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label ?? 'Loading'}
+      accessibilityLiveRegion="polite"
+    >
       <ActivityIndicator size={size} color={COLORS.primary} />
       {label ? <Text style={styles.label}>{label}</Text> : null}
     </View>

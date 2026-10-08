@@ -13,11 +13,17 @@ const STATUS_TONE = {
 };
 
 export default function SessionCard({ session, role, onPress }) {
+  const statusLabel = SESSION_STATUS_LABELS[session.status] ?? session.status;
+  const roleLabel = role === 'teacher' ? 'Teaching' : 'Learning';
+  const summary = `${session.skill_title}, ${roleLabel}, ${formatDate(
+    session.session_date,
+  )} at ${formatTime(session.session_date)}, status: ${statusLabel}`;
+
   return (
-    <Card onPress={onPress} style={styles.card}>
+    <Card onPress={onPress} style={styles.card} accessibilityLabel={summary}>
       <View style={styles.headerRow}>
-        <Badge label={SESSION_STATUS_LABELS[session.status] ?? session.status} tone={STATUS_TONE[session.status]} />
-        <Badge label={role === 'teacher' ? 'Teaching' : 'Learning'} tone="neutral" />
+        <Badge label={statusLabel} tone={STATUS_TONE[session.status]} />
+        <Badge label={roleLabel} tone="neutral" />
       </View>
 
       <Text style={styles.title}>{session.skill_title}</Text>
@@ -25,7 +31,12 @@ export default function SessionCard({ session, role, onPress }) {
       <View style={styles.metaRow}>
         <Ionicons name="calendar-outline" size={14} color={COLORS.textMuted} />
         <Text style={styles.metaText}>{formatDate(session.session_date)}</Text>
-        <Ionicons name="time-outline" size={14} color={COLORS.textMuted} style={{ marginLeft: SPACING.sm }} />
+        <Ionicons
+          name="time-outline"
+          size={14}
+          color={COLORS.textMuted}
+          style={{ marginLeft: SPACING.sm }}
+        />
         <Text style={styles.metaText}>{formatTime(session.session_date)}</Text>
       </View>
     </Card>

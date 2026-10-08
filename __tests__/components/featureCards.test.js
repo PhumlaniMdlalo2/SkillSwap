@@ -32,14 +32,16 @@ describe('SessionCard', () => {
 
   it('calls onPress when pressed', async () => {
     const onPress = jest.fn();
-    const { getByText } = await render(<SessionCard session={session} role="learner" onPress={onPress} />);
+    const { getByText } = await render(
+      <SessionCard session={session} role="learner" onPress={onPress} />,
+    );
     await fireEvent.press(getByText('Beginner Guitar'));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('renders a fallback label for unknown statuses', async () => {
     const { getByText } = await render(
-      <SessionCard session={{ ...session, status: 'weird' }} role="learner" />
+      <SessionCard session={{ ...session, status: 'weird' }} role="learner" />,
     );
     expect(getByText('weird')).toBeTruthy();
   });
@@ -74,7 +76,7 @@ describe('SkillCard', () => {
 
   it('falls back to an em dash for a missing rating', async () => {
     const { getByText } = await render(
-      <SkillCard skill={{ ...skill, teacher: { name: 'Frida Kahlo', rating: null } }} />
+      <SkillCard skill={{ ...skill, teacher: { name: 'Frida Kahlo', rating: null } }} />,
     );
     expect(getByText('—')).toBeTruthy();
   });

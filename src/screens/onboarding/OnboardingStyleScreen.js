@@ -1,12 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../../components/ui/Button';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../store/useAppHooks';
 import { useSwapStore } from '../../store/swapStore';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
+import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 
 const SCALE = [1, 2, 3, 4, 5];
 const FORMAT_OPTIONS = [
@@ -20,6 +33,7 @@ export default function OnboardingStyleScreen() {
   const { user } = useAuth();
   const { from } = useLocalSearchParams();
   const isFirstTimeOnboarding = from === 'onboarding';
+  const queryClient = useQueryClient();
 
   const [teachPace, setTeachPace] = useState(3);
   const [teachStructure, setTeachStructure] = useState(3);
@@ -28,19 +42,40 @@ export default function OnboardingStyleScreen() {
   const [learnStructure, setLearnStructure] = useState(3);
   const [learnFormats, setLearnFormats] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const {
+    data: existing,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['style', user?.user_id],
+    queryFn: () => api.getStylePreferences(user.user_id),
+    enabled: Boolean(user),
+  });
 
   useEffect(() => {
-    if (!user) return;
-    api.getStylePreferences(user.user_id).then((existing) => {
-      if (!existing) return;
-      setTeachPace(existing.teach_pace ?? 3);
-      setTeachStructure(existing.teach_structure ?? 3);
-      setTeachFormats(existing.teach_formats ?? []);
-      setLearnPace(existing.learn_pace ?? 3);
-      setLearnStructure(existing.learn_structure ?? 3);
-      setLearnFormats(existing.learn_formats ?? []);
-    });
-  }, [user]);
+    if (!existing) return;
+    setTeachPace(existing.teach_pace ?? 3);
+    setTeachStructure(existing.teach_structure ?? 3);
+    setTeachFormats(existing.teach_formats ?? []);
+    setLearnPace(existing.learn_pace ?? 3);
+    setLearnStructure(existing.learn_structure ?? 3);
+    setLearnFormats(existing.learn_formats ?? []);
+  }, [existing]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (isPending) return <LoadingSpinner label="Loading your preferences…" />;
+  if (error) return <ErrorState error={error} onRetry={refetch} />;
 
   const toggleFormat = (formats, setFormats, value) => {
     setFormats(formats.includes(value) ? formats.filter((f) => f !== value) : [...formats, value]);
@@ -61,8 +96,7 @@ export default function OnboardingStyleScreen() {
       // is cached in the store for the app session — clear it so the
       // next visit to Skill Match picks up these updated preferences.
       useSwapStore.getState().resetSwipeQueue();
-    } finally {
-      setSaving(false);
+      await queryClient.invalidateQueries({ queryKey: ['style'] });
       if (isFirstTimeOnboarding) {
         router.replace('/(tabs)');
       } else if (router.canGoBack()) {
@@ -70,17 +104,36 @@ export default function OnboardingStyleScreen() {
       } else {
         router.replace('/(tabs)');
       }
+    } catch (err) {
+      notify('Could not save your preferences', toUserMessage(err));
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
+      >
         <Text style={styles.step}>Step 3 of 3</Text>
-        <Text style={styles.title}>What's your style?</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          What's your style?
+        </Text>
         <Text style={styles.subtitle}>
-          This helps Skill Match find teachers who actually fit how you like to learn — and learners who fit how you
-          like to teach.
+          This helps Skill Match find teachers who actually fit how you like to learn — and learners
+          who fit how you like to teach.
         </Text>
 
         <ScaleRow
@@ -121,9 +174,13 @@ export default function OnboardingStyleScreen() {
               <Pressable
                 key={option.value}
                 onPress={() => toggleFormat(teachFormats, setTeachFormats, option.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {option.label}
+                </Text>
               </Pressable>
             );
           })}
@@ -137,16 +194,24 @@ export default function OnboardingStyleScreen() {
               <Pressable
                 key={option.value}
                 onPress={() => toggleFormat(learnFormats, setLearnFormats, option.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{option.label}</Text>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {option.label}
+                </Text>
               </Pressable>
             );
           })}
         </View>
 
         <View style={styles.footer}>
-          <Button title={isFirstTimeOnboarding ? 'Finish' : 'Save'} onPress={finish} loading={saving} />
+          <Button
+            title={isFirstTimeOnboarding ? 'Finish' : 'Save'}
+            onPress={finish}
+            loading={saving}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -164,6 +229,8 @@ function ScaleRow({ title, lowLabel, highLabel, value, onChange }) {
             <Pressable
               key={n}
               onPress={() => onChange(n)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               style={[styles.scaleChip, active && styles.chipActive]}
             >
               <Text style={[styles.chipText, active && styles.chipTextActive]}>{n}</Text>

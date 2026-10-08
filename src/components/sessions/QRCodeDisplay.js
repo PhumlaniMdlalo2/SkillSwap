@@ -3,7 +3,11 @@ import { View, Text, StyleSheet } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { COLORS, RADII, SPACING, FONT_SIZES } from '../../utils/constants';
 
-export default function QRCodeDisplay({ session, size = 200, counterpartLabel = 'session partner' }) {
+export default function QRCodeDisplay({
+  session,
+  size = 200,
+  counterpartLabel = 'session partner',
+}) {
   const payload = JSON.stringify({
     sessionId: session.session_id,
     type: 'skillswap-session-checkin',

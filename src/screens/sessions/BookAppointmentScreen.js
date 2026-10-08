@@ -1,25 +1,58 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Avatar from '../../components/ui/Avatar';
 import Button from '../../components/ui/Button';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import { useWallet } from '../../store/useAppHooks';
+import ErrorState from '../../components/ui/ErrorState';
+import { useAuth, useWallet } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 import { formatTime, groupSlotsByDay } from '../../utils/helpers';
 import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 
 export default function BookAppointmentScreen() {
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const { balance, refresh: refreshWallet } = useWallet();
+  const queryClient = useQueryClient();
 
-  const [request, setRequest] = useState(null);
-  const [slots, setSlots] = useState([]);
   const [selectedSlots, setSelectedSlots] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [scheduling, setScheduling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const {
+    data: request,
+    isPending: requestPending,
+    error: requestError,
+    refetch: refetchRequest,
+  } = useQuery({
+    queryKey: ['requests', id],
+    queryFn: () => api.getRequestById(id),
+    enabled: Boolean(user) && Boolean(id),
+  });
+
+  const {
+    data: slots = [],
+    isPending: slotsPending,
+    error: slotsError,
+    refetch: refetchSlots,
+  } = useQuery({
+    queryKey: ['availability', request?.skill_id],
+    queryFn: () => api.getAvailabilityForSkill(request.skill_id),
+    enabled: Boolean(user) && Boolean(request?.skill_id),
+  });
 
   const groupedSlots = useMemo(() => groupSlotsByDay(slots), [slots]);
 
@@ -28,7 +61,8 @@ export default function BookAppointmentScreen() {
   // contiguous block instead of picking a single hour.
   const handleSelectSlot = (slot, daySlots) => {
     setSelectedSlots((prev) => {
-      const sameDay = prev.length > 0 && daySlots.some((s) => s.availability_id === prev[0].availability_id);
+      const sameDay =
+        prev.length > 0 && daySlots.some((s) => s.availability_id === prev[0].availability_id);
       if (!sameDay) return [slot];
 
       const alreadySelected = prev.some((s) => s.availability_id === slot.availability_id);
@@ -42,19 +76,30 @@ export default function BookAppointmentScreen() {
     });
   };
 
-  useEffect(() => {
-    api.getRequestById(id).then((requestData) => {
-      setRequest(requestData);
-      if (requestData) {
-        api.getAvailabilityForSkill(requestData.skill_id).then((data) => {
-          setSlots(data);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
-  }, [id]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchRequest(), refetchSlots()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (requestPending) return <LoadingSpinner label="Loading available times…" />;
+  if (requestError) return <ErrorState error={requestError} onRetry={refetchRequest} />;
+
+  if (!request || request.status !== 'accepted') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.notFound}>
+          {request ? 'This request is not ready to schedule yet.' : 'Request not found.'}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (slotsPending) return <LoadingSpinner label="Loading available times…" />;
+  if (slotsError) return <ErrorState error={slotsError} onRetry={refetchSlots} />;
 
   const handleSchedule = async () => {
     if (selectedSlots.length === 0) return;
@@ -68,31 +113,37 @@ export default function BookAppointmentScreen() {
         requestId: request.request_id,
         availabilityIds: selectedSlots.map((s) => s.availability_id),
       });
+      await queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      await queryClient.invalidateQueries({ queryKey: ['requests'] });
       await refreshWallet();
-      notify('Session confirmed!', `Your session for "${request.skill?.title}" is booked.`, () => router.replace('/(tabs)'));
+      notify('Session confirmed!', `Your session for "${request.skill?.title}" is booked.`, () =>
+        router.replace('/(tabs)'),
+      );
     } catch (err) {
-      notify('Could not confirm this time', err.message ?? 'Please try again.');
+      notify('Could not confirm this time', toUserMessage(err));
     } finally {
       setScheduling(false);
     }
   };
 
-  if (loading) return <LoadingSpinner label="Loading available times…" />;
-
-  if (!request || request.status !== 'accepted') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.notFound}>
-          {request ? 'This request is not ready to schedule yet.' : 'Request not found.'}
-        </Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Pick a time</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
+      >
+        <Text style={styles.title} accessibilityRole="header">
+          Pick a time
+        </Text>
 
         <View style={styles.teacherRow}>
           <Avatar uri={request.teacher?.avatar} name={request.teacher?.name} size={40} />
@@ -104,8 +155,9 @@ export default function BookAppointmentScreen() {
 
         <Text style={styles.sectionTitle}>Open times</Text>
         {slots.length === 0 ? (
-          <Text style={styles.emptyText}>
-            {request.teacher?.name ?? 'They'} haven't published any open times yet — check back soon.
+          <Text style={styles.emptyText} accessible>
+            {request.teacher?.name ?? 'They'} haven't published any open times yet — check back
+            soon.
           </Text>
         ) : (
           <>
@@ -117,11 +169,15 @@ export default function BookAppointmentScreen() {
                 <Text style={styles.dayGroupHeader}>{group.label}</Text>
                 <View style={styles.slotList}>
                   {group.slots.map((slot) => {
-                    const isSelected = selectedSlots.some((s) => s.availability_id === slot.availability_id);
+                    const isSelected = selectedSlots.some(
+                      (s) => s.availability_id === slot.availability_id,
+                    );
                     return (
                       <Pressable
                         key={slot.availability_id}
                         onPress={() => handleSelectSlot(slot, group.slots)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
                         style={[styles.slot, isSelected && styles.slotSelected]}
                       >
                         <Text style={[styles.slotText, isSelected && styles.slotTextSelected]}>
@@ -141,7 +197,9 @@ export default function BookAppointmentScreen() {
         <View>
           <Text style={styles.costLabel}>Cost</Text>
           <Text style={styles.costValue}>
-            {selectedSlots.length > 0 ? `${selectedSlots.length} token${selectedSlots.length === 1 ? '' : 's'}` : '—'}
+            {selectedSlots.length > 0
+              ? `${selectedSlots.length} token${selectedSlots.length === 1 ? '' : 's'}`
+              : '—'}
           </Text>
         </View>
         <Button

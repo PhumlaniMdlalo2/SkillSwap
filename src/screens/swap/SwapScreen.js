@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import SwipeCard from '../../components/swap/SwipeCard';
 import SwipeActions from '../../components/swap/SwipeActions';
 import SwapEmptyState from '../../components/swap/SwapEmptyState';
@@ -12,6 +14,8 @@ import { useSwipeAnimation } from '../../hooks/useSwipeAnimation';
 import { useMatchingLogic } from '../../hooks/useMatchingLogic';
 import { useSwapStore } from '../../store/swapStore';
 import { swapService } from '../../services/swapService';
+import { useAuth } from '../../store/useAppHooks';
+import { toUserMessage } from '../../utils/errors';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 const { width, height } = Dimensions.get('window');
@@ -19,9 +23,9 @@ const CARD_WIDTH = width - 40;
 const CARD_HEIGHT = height * 0.55;
 
 export default function SwapScreen() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { user } = useAuth();
   const [isSwiping, setIsSwiping] = useState(false);
+  const [swipeError, setSwipeError] = useState(null);
 
   const {
     candidates,
@@ -33,6 +37,26 @@ export default function SwapScreen() {
     addMatch,
   } = useSwapStore();
 
+  const {
+    data: loadedCandidates,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['swap-candidates', user?.user_id],
+    queryFn: () => swapService.getNextCandidates(10),
+    enabled: Boolean(user),
+  });
+
+  // The deck is cached in the store for the session, but a refetch always
+  // returns the not-yet-swiped candidates, so index 0 is the next card.
+  useEffect(() => {
+    if (loadedCandidates) {
+      setCandidates(loadedCandidates);
+      setCurrentIndex(0);
+    }
+  }, [loadedCandidates, setCandidates, setCurrentIndex]);
+
   const { filteredCandidates } = useMatchingLogic({ allCandidates: candidates, preferences });
 
   const currentCandidate =
@@ -43,22 +67,26 @@ export default function SwapScreen() {
   const handleSwipe = async (direction) => {
     if (!currentCandidate || isSwiping) return;
     setIsSwiping(true);
+    setSwipeError(null);
     try {
-      const { matched } = await swapService.swipe(currentCandidate.id, direction);
+      const { matched, matchId } = await swapService.swipe(currentCandidate.id, direction);
       addSwipe({ targetUserId: currentCandidate.id, direction });
 
       if (matched) {
         addMatch({ userId2: currentCandidate.id, matchedAt: new Date().toISOString() });
         resetAnimation();
         setCurrentIndex(currentIndex + 1);
-        router.push({ pathname: '/swap/results', params: { candidateId: currentCandidate.id } });
+        router.push({
+          pathname: '/swap/results',
+          params: { candidateId: currentCandidate.id, matchId: matchId || '' },
+        });
         return;
       }
 
       resetAnimation();
       setCurrentIndex(currentIndex + 1);
     } catch (err) {
-      setError(err.message ?? 'Swipe failed');
+      setSwipeError(toUserMessage(err));
     } finally {
       setIsSwiping(false);
     }
@@ -67,11 +95,12 @@ export default function SwapScreen() {
   const handleUndo = async () => {
     if (currentIndex === 0 || isSwiping) return;
     setIsSwiping(true);
+    setSwipeError(null);
     try {
       await swapService.undoLastSwipe();
       setCurrentIndex(currentIndex - 1);
     } catch (err) {
-      setError(err.message ?? 'Could not undo');
+      setSwipeError(toUserMessage(err));
     } finally {
       setIsSwiping(false);
     }
@@ -88,27 +117,7 @@ export default function SwapScreen() {
     cardWidth: CARD_WIDTH,
   });
 
-  const loadCandidates = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await swapService.getNextCandidates(10);
-      setCandidates(data);
-      setCurrentIndex(0);
-    } catch (err) {
-      setError(err.message ?? 'Failed to load candidates');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (candidates.length === 0) loadCandidates();
-    else setIsLoading(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (isLoading && !candidates.length) {
+  if (isPending) {
     return (
       <SafeAreaView style={styles.container}>
         <LoadingSpinner label="Finding people to swap skills with…" />
@@ -119,9 +128,7 @@ export default function SwapScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
+        <ErrorState error={error} onRetry={refetch} />
       </SafeAreaView>
     );
   }
@@ -129,7 +136,7 @@ export default function SwapScreen() {
   if (!currentCandidate) {
     return (
       <SafeAreaView style={styles.container}>
-        <SwapEmptyState onRefresh={loadCandidates} onUndo={handleUndo} canUndo={currentIndex > 0} />
+        <SwapEmptyState onRefresh={refetch} onUndo={handleUndo} canUndo={currentIndex > 0} />
       </SafeAreaView>
     );
   }
@@ -160,17 +167,16 @@ export default function SwapScreen() {
       </View>
 
       <View style={styles.cardContainer}>
-        {filteredCandidates &&
-          currentIndex + 1 < filteredCandidates.length && (
-            <View style={styles.nextCardPreview}>
-              <SwipeCard
-                candidate={filteredCandidates[currentIndex + 1]}
-                cardWidth={CARD_WIDTH - 10}
-                cardHeight={CARD_HEIGHT}
-                disabled
-              />
-            </View>
-          )}
+        {filteredCandidates && currentIndex + 1 < filteredCandidates.length && (
+          <View style={styles.nextCardPreview}>
+            <SwipeCard
+              candidate={filteredCandidates[currentIndex + 1]}
+              cardWidth={CARD_WIDTH - 10}
+              cardHeight={CARD_HEIGHT}
+              disabled
+            />
+          </View>
+        )}
 
         <SwipeCard
           candidate={currentCandidate}
@@ -183,6 +189,8 @@ export default function SwapScreen() {
           nopeOpacityStyle={nopeOpacityStyle}
         />
       </View>
+
+      {swipeError ? <Text style={styles.errorText}>{swipeError}</Text> : null}
 
       <SwipeActions
         onDecline={() => handleSwipe('left')}
@@ -232,15 +240,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     transform: [{ scale: 0.95 }],
   },
-  centerContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.xl,
-  },
   errorText: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.danger,
     textAlign: 'center',
+    marginHorizontal: SPACING.xl,
+    marginBottom: SPACING.sm,
   },
 });

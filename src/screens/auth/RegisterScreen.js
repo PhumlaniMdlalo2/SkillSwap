@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../store/useAppHooks';
+import { toUserMessage } from '../../utils/errors';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
   const { register } = useAuth();
@@ -16,11 +19,9 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const emailValid = EMAIL_PATTERN.test(email.trim());
   const canSubmit =
-    name.trim().length > 0 &&
-    email.trim().length > 0 &&
-    password.length >= 6 &&
-    password === confirmPassword;
+    name.trim().length > 0 && emailValid && password.length >= 6 && password === confirmPassword;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -30,7 +31,7 @@ export default function RegisterScreen() {
       await register(name.trim(), email.trim(), password);
       router.replace('/(onboarding)/teach');
     } catch (err) {
-      setError(err.message ?? 'Could not create your account. Please try again.');
+      setError(toUserMessage(err, 'Could not create your account. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -38,7 +39,10 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Create your account</Text>
           <Text style={styles.subtitle}>Start teaching and learning with time tokens.</Text>
@@ -51,6 +55,7 @@ export default function RegisterScreen() {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            error={email.length > 0 && !emailValid ? 'Enter a valid email address' : undefined}
           />
           <Input
             label="Password"
@@ -75,7 +80,11 @@ export default function RegisterScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button title="Sign Up" onPress={handleSubmit} disabled={!canSubmit} loading={loading} />
-          <Button title="I already have an account" variant="ghost" onPress={() => router.push('/(auth)/login')} />
+          <Button
+            title="I already have an account"
+            variant="ghost"
+            onPress={() => router.push('/(auth)/login')}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

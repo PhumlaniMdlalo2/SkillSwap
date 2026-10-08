@@ -22,18 +22,14 @@ describe('Button', () => {
   });
 
   it('shows a spinner and disables the button while loading', async () => {
-    const { queryByText, toJSON } = await render(
-      <Button title="Go" onPress={jest.fn()} loading />
-    );
+    const { queryByText, toJSON } = await render(<Button title="Go" onPress={jest.fn()} loading />);
     expect(queryByText('Go')).toBeNull();
     expect(JSON.stringify(toJSON())).toContain('ActivityIndicator');
     expect(JSON.stringify(toJSON())).toContain('"disabled":true');
   });
 
   it('falls back to primary variant for unknown variants', async () => {
-    const { getByText } = await render(
-      <Button title="X" onPress={jest.fn()} variant="bogus" />
-    );
+    const { getByText } = await render(<Button title="X" onPress={jest.fn()} variant="bogus" />);
     expect(getByText('X')).toBeTruthy();
   });
 });

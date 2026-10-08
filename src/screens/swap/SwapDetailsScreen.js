@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import Avatar from '../../components/ui/Avatar';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useSwapStore } from '../../store/swapStore';
+import { swapService } from '../../services/swapService';
+import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function SwapDetailsScreen() {
   const { id } = useLocalSearchParams();
-  const { candidates } = useSwapStore();
+  const queryClient = useQueryClient();
+  const [submitting, setSubmitting] = useState(false);
+  const { candidates, currentIndex, setCurrentIndex, addSwipe, addMatch } = useSwapStore();
   const candidate = candidates.find((c) => c.id === id);
 
   if (!candidate) {
@@ -21,6 +27,33 @@ export default function SwapDetailsScreen() {
       </SafeAreaView>
     );
   }
+
+  const handleSwap = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const { matched } = await swapService.swipe(candidate.id, 'right');
+      addSwipe({ targetUserId: candidate.id, direction: 'right' });
+      if (matched) {
+        addMatch({ userId2: candidate.id, matchedAt: new Date().toISOString() });
+      }
+      setCurrentIndex(currentIndex + 1);
+
+      await queryClient.invalidateQueries({ queryKey: ['swap-candidates'] });
+      await queryClient.invalidateQueries({ queryKey: ['matches'] });
+      await queryClient.invalidateQueries({ queryKey: ['swipe-history'] });
+
+      if (matched) {
+        router.replace({ pathname: '/swap/results', params: { candidateId: candidate.id } });
+      } else {
+        router.back();
+      }
+    } catch (err) {
+      notify('Could not record this swipe', toUserMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -59,8 +92,20 @@ export default function SwapDetailsScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button title="Pass" variant="outline" fullWidth={false} style={styles.footerButton} onPress={() => router.back()} />
-        <Button title="Swap Skills" fullWidth={false} style={styles.footerButton} onPress={() => router.back()} />
+        <Button
+          title="Pass"
+          variant="outline"
+          fullWidth={false}
+          style={styles.footerButton}
+          onPress={() => router.back()}
+        />
+        <Button
+          title="Swap Skills"
+          fullWidth={false}
+          style={styles.footerButton}
+          onPress={handleSwap}
+          loading={submitting}
+        />
       </View>
     </SafeAreaView>
   );

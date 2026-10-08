@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,8 +15,8 @@ export default function WelcomeScreen() {
         </View>
         <Text style={styles.title}>SkillSwap</Text>
         <Text style={styles.subtitle}>
-          Trade skills, not money. Teach what you know, learn what you don't —
-          pay each other in time.
+          Trade skills, not money. Teach what you know, learn what you don't — pay each other in
+          time.
         </Text>
       </View>
 

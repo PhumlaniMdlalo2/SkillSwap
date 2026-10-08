@@ -7,11 +7,27 @@ export default function Modal({ visible, onClose, title, children }) {
   return (
     <RNModal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
         <View style={styles.sheet}>
           <View style={styles.header}>
-            {title ? <Text style={styles.title}>{title}</Text> : <View />}
-            <Pressable onPress={onClose} hitSlop={12}>
+            {title ? (
+              <Text style={styles.title} accessibilityRole="header">
+                {title}
+              </Text>
+            ) : (
+              <View />
+            )}
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Ionicons name="close" size={22} color={COLORS.textMuted} />
             </Pressable>
           </View>

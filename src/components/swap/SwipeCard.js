@@ -36,8 +36,26 @@ export default function SwipeCard({
   const dimensionStyle = { width: cardWidth, height: cardHeight };
   const photoHeight = cardHeight * 0.4;
 
+  const summary = [
+    candidate.name,
+    candidate.category,
+    candidate.rating,
+    candidate.teaches,
+    candidate.wantsToLearn,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   const content = (
-    <Pressable onPress={disabled ? undefined : onPress} style={styles.pressable}>
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={styles.pressable}
+      accessible={!disabled}
+      accessibilityRole="button"
+      accessibilityLabel={summary}
+      accessibilityState={{ disabled }}
+      accessibilityHint="Swipe to like or pass"
+    >
       <View style={[styles.photoWrap, { height: photoHeight }]}>
         <Image source={{ uri: candidate.photo }} style={styles.photo} />
         <View style={styles.photoTopRow}>
@@ -54,7 +72,9 @@ export default function SwipeCard({
 
       <View style={styles.body}>
         <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>{candidate.name}</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {candidate.name}
+          </Text>
           {candidate.memberSince ? (
             <Text style={styles.memberSince}>
               Member since {new Date(candidate.memberSince).getFullYear()}
@@ -71,7 +91,9 @@ export default function SwipeCard({
             <View style={styles.chipRow}>
               {candidate.skills.slice(0, 3).map((skill) => (
                 <View key={skill.skill_id} style={styles.chip}>
-                  <Text style={styles.chipText} numberOfLines={1}>{skill.title}</Text>
+                  <Text style={styles.chipText} numberOfLines={1}>
+                    {skill.title}
+                  </Text>
                 </View>
               ))}
               {candidate.skills.length > 3 ? (
@@ -81,7 +103,9 @@ export default function SwipeCard({
               ) : null}
             </View>
           ) : (
-            <Text style={styles.tradeValue} numberOfLines={1}>{candidate.teaches}</Text>
+            <Text style={styles.tradeValue} numberOfLines={1}>
+              {candidate.teaches}
+            </Text>
           )}
         </View>
 
@@ -89,22 +113,30 @@ export default function SwipeCard({
           <Ionicons name="bulb-outline" size={16} color={COLORS.secondary} />
           <Text style={styles.tradeLabel}>Wants to learn</Text>
           <Text style={styles.tradeValue} numberOfLines={1}>
-            {candidate.interests?.length > 0 ? candidate.interests.join(', ') : candidate.wantsToLearn}
+            {candidate.interests?.length > 0
+              ? candidate.interests.join(', ')
+              : candidate.wantsToLearn}
           </Text>
         </View>
 
-        {(candidate.compatPace || candidate.compatStructure || candidate.compatFormats?.length > 0) && (
+        {(candidate.compatPace ||
+          candidate.compatStructure ||
+          candidate.compatFormats?.length > 0) && (
           <View style={styles.compatRow}>
             {candidate.compatPace && <CompatTag label="Similar pace" />}
             {candidate.compatStructure && <CompatTag label="Same structure" />}
             {candidate.compatFormats?.length > 0 && (
-              <CompatTag label={`Shares your ${FORMAT_LABELS[candidate.compatFormats[0]] ?? candidate.compatFormats[0]} style`} />
+              <CompatTag
+                label={`Shares your ${FORMAT_LABELS[candidate.compatFormats[0]] ?? candidate.compatFormats[0]} style`}
+              />
             )}
           </View>
         )}
 
         {candidate.bio ? (
-          <Text style={styles.bio} numberOfLines={2}>{candidate.bio}</Text>
+          <Text style={styles.bio} numberOfLines={2}>
+            {candidate.bio}
+          </Text>
         ) : null}
       </View>
 
@@ -128,9 +160,7 @@ export default function SwipeCard({
 
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.card, dimensionStyle, animatedStyle]}>
-        {content}
-      </Animated.View>
+      <Animated.View style={[styles.card, dimensionStyle, animatedStyle]}>{content}</Animated.View>
     </GestureDetector>
   );
 }

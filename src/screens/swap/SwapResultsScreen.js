@@ -6,10 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, withSpring, useAnimatedStyle } from 'react-native-reanimated';
 import Button from '../../components/ui/Button';
 import { useSwapStore } from '../../store/swapStore';
+import { useAuth } from '../../store/useAppHooks';
+import { chatService } from '../../services/chatService';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 
 export default function SwapResultsScreen() {
-  const { candidateId } = useLocalSearchParams();
+  const { candidateId, matchId } = useLocalSearchParams();
+  const { user } = useAuth();
   const { candidates } = useSwapStore();
   const candidate = candidates.find((c) => c.id === candidateId);
   const scale = useSharedValue(0.6);
@@ -31,7 +34,8 @@ export default function SwapResultsScreen() {
 
         <Text style={styles.title}>You've got a swap!</Text>
         <Text style={styles.subtitle}>
-          You and {candidate?.name ?? 'this member'} both want to trade skills. Time to plan a session.
+          You and {candidate?.name ?? 'this member'} both want to trade skills. Time to plan a
+          session.
         </Text>
 
         {candidate?.photo ? <Image source={{ uri: candidate.photo }} style={styles.photo} /> : null}
@@ -50,11 +54,25 @@ export default function SwapResultsScreen() {
         ) : null}
 
         <View style={styles.actions}>
+          <Button
+            title={`Message ${candidate?.name?.split(' ')[0] ?? 'Partner'} 💬`}
+            variant="secondary"
+            style={{ backgroundColor: COLORS.white, marginBottom: SPACING.xs }}
+            onPress={async () => {
+              let targetMatchId = matchId;
+              if (!targetMatchId && user && candidate?.id) {
+                targetMatchId = await chatService.findMatchIdBetweenUsers(user.user_id, candidate.id);
+              }
+              if (targetMatchId) {
+                router.push(`/chat/${targetMatchId}`);
+              }
+            }}
+          />
           {candidate?.teachesSkillId ? (
             <Button
               title={`Request a Session — ${candidate.teaches}`}
               variant="secondary"
-              style={{ backgroundColor: COLORS.white }}
+              style={{ backgroundColor: 'rgba(255,255,255,0.85)' }}
               onPress={() => router.push(`/skills/${candidate.teachesSkillId}`)}
             />
           ) : null}
@@ -62,7 +80,7 @@ export default function SwapResultsScreen() {
           <Button
             title="View Profile"
             variant="secondary"
-            style={{ backgroundColor: COLORS.white }}
+            style={{ backgroundColor: 'rgba(255,255,255,0.85)' }}
             onPress={() => router.replace(`/swap/${candidate?.id}`)}
           />
         </View>

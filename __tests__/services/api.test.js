@@ -36,7 +36,7 @@ function makeBuilder() {
           return makeBuilder();
         };
       },
-    }
+    },
   );
 }
 
@@ -50,7 +50,9 @@ describe('api service', () => {
     // quiet the storage helper used by uploadAvatar
     supabase.storage.from.mockReturnValue({
       upload: jest.fn().mockResolvedValue({ error: null }),
-      getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example/avatar.png' } }),
+      getPublicUrl: jest
+        .fn()
+        .mockReturnValue({ data: { publicUrl: 'https://cdn.example/avatar.png' } }),
     });
   });
 
@@ -115,7 +117,9 @@ describe('api service', () => {
     it('inserts a skill and returns the created row', async () => {
       const created = { skill_id: 'new', title: 'Guitar' };
       mockFromResult({ data: created, error: null });
-      await expect(addSkill({ userId: 'u1', title: 'Guitar', description: 'D', category: 'Music' })).resolves.toEqual(created);
+      await expect(
+        addSkill({ userId: 'u1', title: 'Guitar', description: 'D', category: 'Music' }),
+      ).resolves.toEqual(created);
       const insert = builderCalls.find((c) => c.method === 'insert');
       expect(insert.args[0]).toEqual({
         user_id: 'u1',
@@ -145,7 +149,10 @@ describe('api service', () => {
       await getAvailabilityForSkill('s1');
       expect(builderCalls).toContainEqual({ method: 'eq', args: ['skill_id', 's1'] });
       expect(builderCalls).toContainEqual({ method: 'eq', args: ['booked', false] });
-      expect(builderCalls).toContainEqual({ method: 'order', args: ['start_time', { ascending: true }] });
+      expect(builderCalls).toContainEqual({
+        method: 'order',
+        args: ['start_time', { ascending: true }],
+      });
     });
   });
 

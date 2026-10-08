@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -10,9 +11,11 @@ import Badge from '../../components/ui/Badge';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
+import { toUserMessage } from '../../utils/errors';
 
 export default function OnboardingTeachScreen() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(SKILL_CATEGORIES[0]);
@@ -36,8 +39,9 @@ export default function OnboardingTeachScreen() {
       setAddedSkills((prev) => [skill, ...prev]);
       setTitle('');
       setDescription('');
+      await queryClient.invalidateQueries({ queryKey: ['skills'] });
     } catch (err) {
-      setError(err.message ?? 'Could not add this skill. Please try again.');
+      setError(toUserMessage(err, 'Could not add this skill. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -52,7 +56,8 @@ export default function OnboardingTeachScreen() {
     }
   };
 
-  const goNext = () => router.push({ pathname: '/(onboarding)/learn', params: { from: 'onboarding' } });
+  const goNext = () =>
+    router.push({ pathname: '/(onboarding)/learn', params: { from: 'onboarding' } });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -79,7 +84,12 @@ export default function OnboardingTeachScreen() {
           </View>
         )}
 
-        <Input label="Skill title" placeholder="e.g. Jazz Piano Fundamentals" value={title} onChangeText={setTitle} />
+        <Input
+          label="Skill title"
+          placeholder="e.g. Jazz Piano Fundamentals"
+          value={title}
+          onChangeText={setTitle}
+        />
         <Input
           label="Description"
           placeholder="What will learners get out of a session with you?"
@@ -96,7 +106,12 @@ export default function OnboardingTeachScreen() {
               onPress={() => setCategory(item)}
               style={[styles.categoryChip, category === item && styles.categoryChipActive]}
             >
-              <Text style={[styles.categoryChipText, category === item && styles.categoryChipTextActive]}>
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  category === item && styles.categoryChipTextActive,
+                ]}
+              >
                 {item}
               </Text>
             </Pressable>

@@ -57,7 +57,7 @@ describe('confirmAction', () => {
       expect.arrayContaining([
         expect.objectContaining({ text: 'Cancel' }),
         expect.objectContaining({ text: 'Yes', style: 'destructive' }),
-      ])
+      ]),
     );
   });
 });
@@ -96,7 +96,7 @@ describe('notify', () => {
     expect(alertSpy).toHaveBeenCalledWith(
       'Title',
       'Message',
-      expect.arrayContaining([expect.objectContaining({ text: 'OK' })])
+      expect.arrayContaining([expect.objectContaining({ text: 'OK' })]),
     );
     expect(onDismiss).not.toHaveBeenCalled();
   });

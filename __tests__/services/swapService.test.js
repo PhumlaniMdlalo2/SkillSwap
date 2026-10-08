@@ -24,7 +24,7 @@ function makeBuilder() {
           return makeBuilder();
         };
       },
-    }
+    },
   );
 }
 
@@ -189,8 +189,16 @@ describe('swapService', () => {
       });
 
       const matches = await swapService.fetchMatches('me');
-      expect(matches[0]).toMatchObject({ id: 'm1', userId2: 'other1', counterpart: { name: 'Other One' } });
-      expect(matches[1]).toMatchObject({ id: 'm2', userId2: 'other2', counterpart: { name: 'Other Two' } });
+      expect(matches[0]).toMatchObject({
+        id: 'm1',
+        userId2: 'other1',
+        counterpart: { name: 'Other One' },
+      });
+      expect(matches[1]).toMatchObject({
+        id: 'm2',
+        userId2: 'other2',
+        counterpart: { name: 'Other Two' },
+      });
     });
   });
 
@@ -218,7 +226,10 @@ describe('swapService', () => {
   describe('updateSwapPreferences', () => {
     it('upserts with mapped fields', async () => {
       mockFromResult({ data: { user_id: 'u1' }, error: null });
-      await swapService.updateSwapPreferences('u1', { skillCategory: 'Music', notificationsEnabled: false });
+      await swapService.updateSwapPreferences('u1', {
+        skillCategory: 'Music',
+        notificationsEnabled: false,
+      });
 
       const upsert = builderCalls.find((c) => c.method === 'upsert');
       expect(upsert.args[0]).toMatchObject({

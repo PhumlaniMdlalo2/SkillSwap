@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import LoginForm from '../../components/auth/LoginForm';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../store/useAppHooks';
+import { toUserMessage } from '../../utils/errors';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function LoginScreen() {
@@ -19,7 +20,7 @@ export default function LoginScreen() {
       await login(email, password);
       router.replace('/(tabs)');
     } catch (err) {
-      setError(err.message ?? 'Could not log in. Please try again.');
+      setError(toUserMessage(err, 'Could not log in. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -27,7 +28,10 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
         <View style={styles.content}>
           <Text style={styles.title}>Welcome back</Text>
           <Text style={styles.subtitle}>Log in to keep swapping skills.</Text>

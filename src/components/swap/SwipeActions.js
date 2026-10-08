@@ -14,17 +14,35 @@ export default function SwipeActions({ onDecline, onUndo, onAccept, canUndo, isL
         disabled={isLoading || !canUndo}
         small
       />
-      <ActionButton icon="swap-horizontal" color={COLORS.secondary} onPress={onAccept} disabled={isLoading} />
+      <ActionButton
+        icon="swap-horizontal"
+        color={COLORS.secondary}
+        onPress={onAccept}
+        disabled={isLoading}
+      />
       {isLoading ? <ActivityIndicator style={styles.spinner} color={COLORS.primary} /> : null}
     </View>
   );
 }
 
 function ActionButton({ icon, color, onPress, disabled, small }) {
+  const label =
+    {
+      close: 'Pass',
+      'arrow-undo': 'Undo',
+      'swap-horizontal': 'Match',
+    }[icon] ?? icon;
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      accessibilityHint={label}
+      hitSlop={12}
       style={({ pressed }) => [
         styles.button,
         small && styles.buttonSmall,

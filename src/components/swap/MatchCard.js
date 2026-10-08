@@ -6,12 +6,23 @@ import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 import { timeAgo } from '../../utils/helpers';
 
 export default function MatchCard({ match, candidate, onPress }) {
+  const name = candidate?.name ?? 'SkillSwap member';
+  const summary = [
+    name,
+    candidate?.teaches ? `teaches ${candidate.teaches}` : null,
+    `connected ${timeAgo(match.matchedAt)}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return (
-    <Card onPress={onPress} style={styles.card}>
+    <Card onPress={onPress} style={styles.card} accessibilityLabel={summary}>
       <Avatar uri={candidate?.photo} name={candidate?.name} size={48} />
       <View style={styles.info}>
-        <Text style={styles.name}>{candidate?.name ?? 'SkillSwap member'}</Text>
-        <Text style={styles.skill} numberOfLines={1}>Teaches {candidate?.teaches}</Text>
+        <Text style={styles.name}>{name}</Text>
+        <Text style={styles.skill} numberOfLines={1}>
+          Teaches {candidate?.teaches}
+        </Text>
         <Text style={styles.time}>Connected {timeAgo(match.matchedAt)}</Text>
       </View>
     </Card>

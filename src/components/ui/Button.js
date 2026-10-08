@@ -4,10 +4,26 @@ import { COLORS, RADII, SPACING, FONT_SIZES } from '../../utils/constants';
 
 const VARIANT_STYLES = {
   primary: { backgroundColor: COLORS.primary, textColor: COLORS.white, borderColor: 'transparent' },
-  secondary: { backgroundColor: COLORS.primaryLight, textColor: COLORS.primary, borderColor: 'transparent' },
-  outline: { backgroundColor: 'transparent', textColor: COLORS.primary, borderColor: COLORS.primary },
-  danger: { backgroundColor: COLORS.dangerLight, textColor: COLORS.danger, borderColor: 'transparent' },
-  ghost: { backgroundColor: 'transparent', textColor: COLORS.textMuted, borderColor: 'transparent' },
+  secondary: {
+    backgroundColor: COLORS.primaryLight,
+    textColor: COLORS.primary,
+    borderColor: 'transparent',
+  },
+  outline: {
+    backgroundColor: 'transparent',
+    textColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  danger: {
+    backgroundColor: COLORS.dangerLight,
+    textColor: COLORS.danger,
+    borderColor: 'transparent',
+  },
+  ghost: {
+    backgroundColor: 'transparent',
+    textColor: COLORS.textMuted,
+    borderColor: 'transparent',
+  },
 };
 
 export default function Button({
@@ -20,13 +36,18 @@ export default function Button({
   style,
   fullWidth = true,
 }) {
-  const palette = VARIANT_STYLES[variant] ?? VARIANT_STYLES.primary;
   const isDisabled = disabled || loading;
+  const palette = VARIANT_STYLES[variant] ?? VARIANT_STYLES.primary;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: isDisabled }}
+      hitSlop={6}
       style={({ pressed }) => [
         styles.base,
         {

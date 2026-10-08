@@ -8,23 +8,42 @@ import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function SkillCard({ skill, onPress }) {
   const teacher = skill.teacher;
+  const teacherName = teacher?.name ?? 'SkillSwap teacher';
+  const summary = [
+    skill.title,
+    skill.category,
+    `taught by ${teacherName}`,
+    teacher?.rating ? `rated ${teacher.rating}` : 'not yet rated',
+  ].join(', ');
 
   return (
-    <Card onPress={onPress} style={styles.card}>
+    <Card onPress={onPress} style={styles.card} accessibilityLabel={summary}>
       <View style={styles.headerRow}>
         <Badge label={skill.category} />
         <View style={styles.ratingRow}>
-          <Ionicons name="star" size={14} color={COLORS.token} />
+          <Ionicons
+            name="star"
+            size={14}
+            color={COLORS.token}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
           <Text style={styles.ratingText}>{teacher?.rating ?? '—'}</Text>
         </View>
       </View>
 
-      <Text style={styles.title} numberOfLines={2}>{skill.title}</Text>
-      <Text style={styles.description} numberOfLines={2}>{skill.description}</Text>
+      <Text style={styles.title} numberOfLines={2}>
+        {skill.title}
+      </Text>
+      <Text style={styles.description} numberOfLines={2}>
+        {skill.description}
+      </Text>
 
       <View style={styles.teacherRow}>
         <Avatar uri={teacher?.avatar} name={teacher?.name} size={28} />
-        <Text style={styles.teacherName} numberOfLines={1}>{teacher?.name ?? 'SkillSwap teacher'}</Text>
+        <Text style={styles.teacherName} numberOfLines={1}>
+          {teacher?.name ?? 'SkillSwap teacher'}
+        </Text>
       </View>
     </Card>
   );

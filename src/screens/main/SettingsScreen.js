@@ -1,17 +1,24 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Switch, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../store/useAppHooks';
+import { usePersistentSetting } from '../../hooks/usePersistentSetting';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 import { confirmAction } from '../../utils/alert';
 
 export default function SettingsScreen() {
   const { logout } = useAuth();
-  const [sessionReminders, setSessionReminders] = useState(true);
-  const [matchNotifications, setMatchNotifications] = useState(true);
-  const [publicProfile, setPublicProfile] = useState(true);
+  const [sessionReminders, setSessionReminders] = usePersistentSetting(
+    'settings.sessionReminders',
+    true,
+  );
+  const [matchNotifications, setMatchNotifications] = usePersistentSetting(
+    'settings.swipeMatchAlerts',
+    true,
+  );
+  const [publicProfile, setPublicProfile] = usePersistentSetting('settings.publicProfile', true);
 
   const handleLogout = () => {
     confirmAction('Log out', 'Are you sure you want to log out?', {
@@ -52,7 +59,12 @@ export default function SettingsScreen() {
           />
         </View>
 
-        <Button title="Log out" variant="danger" onPress={handleLogout} style={{ marginTop: SPACING.lg }} />
+        <Button
+          title="Log out"
+          variant="danger"
+          onPress={handleLogout}
+          style={{ marginTop: SPACING.lg }}
+        />
       </ScrollView>
     </SafeAreaView>
   );

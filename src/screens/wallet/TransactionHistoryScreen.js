@@ -1,9 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Pressable,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Card from '../../components/ui/Card';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import { useWallet } from '../../store/useAppHooks';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 import { formatTokens, formatDateTime } from '../../utils/helpers';
@@ -15,8 +24,9 @@ const FILTERS = [
 ];
 
 export default function TransactionHistoryScreen() {
-  const { transactions, loading, refresh } = useWallet();
+  const { transactions, loading, error, refresh } = useWallet();
   const [filter, setFilter] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -25,12 +35,23 @@ export default function TransactionHistoryScreen() {
 
   const filtered = useMemo(
     () => (filter === 'all' ? transactions : transactions.filter((t) => t.type === filter)),
-    [transactions, filter]
+    [transactions, filter],
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (loading && transactions.length === 0) {
     return <LoadingSpinner label="Loading transactions…" />;
   }
+
+  if (error) return <ErrorState error={error} onRetry={refresh} />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -43,7 +64,9 @@ export default function TransactionHistoryScreen() {
               onPress={() => setFilter(f.key)}
               style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
             >
-              <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
+              <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
+                {f.label}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -53,13 +76,31 @@ export default function TransactionHistoryScreen() {
         data={filtered}
         keyExtractor={(item) => item.transaction_id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+            />
+          )
+        }
         ListEmptyComponent={<Text style={styles.emptyText}>No transactions in this view yet.</Text>}
         renderItem={({ item }) => {
           const isEarn = item.type === 'earn';
           return (
             <Card style={styles.txCard}>
-              <View style={[styles.txIcon, { backgroundColor: isEarn ? COLORS.secondaryLight : COLORS.dangerLight }]}>
-                <Ionicons name={isEarn ? 'arrow-down' : 'arrow-up'} size={16} color={isEarn ? COLORS.secondary : COLORS.danger} />
+              <View
+                style={[
+                  styles.txIcon,
+                  { backgroundColor: isEarn ? COLORS.secondaryLight : COLORS.dangerLight },
+                ]}
+              >
+                <Ionicons
+                  name={isEarn ? 'arrow-down' : 'arrow-up'}
+                  size={16}
+                  color={isEarn ? COLORS.secondary : COLORS.danger}
+                />
               </View>
               <View style={styles.txInfo}>
                 <Text style={styles.txDescription}>{item.description}</Text>

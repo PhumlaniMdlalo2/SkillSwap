@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { renderHook, waitFor, act } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WalletContext, WalletProvider } from '../../src/store/WalletContext';
 import { AuthContext } from '../../src/store/AuthContext';
 import * as api from '../../src/services/api';
@@ -13,22 +14,34 @@ jest.mock('../../src/store/AuthContext', () => ({
   AuthContext: require('react').createContext(null),
 }));
 
-const authenticatedWrapper = ({ children }) => (
-  <AuthContext.Provider value={{ user: { user_id: 'u1' } }}>
-    <WalletProvider>{children}</WalletProvider>
-  </AuthContext.Provider>
-);
+let activeClient;
 
-const anonymousWrapper = ({ children }) => (
-  <AuthContext.Provider value={{ user: null }}>
-    <WalletProvider>{children}</WalletProvider>
-  </AuthContext.Provider>
-);
+function makeWrapper(user) {
+  return function Wrapper({ children }) {
+    return (
+      <AuthContext.Provider value={{ user }}>
+        <QueryClientProvider client={activeClient}>
+          <WalletProvider>{children}</WalletProvider>
+        </QueryClientProvider>
+      </AuthContext.Provider>
+    );
+  };
+}
+
+const authenticatedWrapper = makeWrapper({ user_id: 'u1' });
+const anonymousWrapper = makeWrapper(null);
 
 describe('WalletProvider', () => {
   beforeEach(() => {
     api.getWallet.mockReset();
     api.getTransactions.mockReset();
+    activeClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: 0 } },
+    });
+  });
+
+  afterEach(() => {
+    activeClient.clear();
   });
 
   it('fetches wallet balance and transactions for the logged-in user', async () => {
@@ -84,7 +97,20 @@ describe('WalletProvider', () => {
       await result.current.refresh();
     });
 
-    expect(result.current.balance).toBe(9);
-    expect(result.current.transactions).toEqual([{ id: 'x' }]);
+    await waitFor(() => expect(result.current.balance).toBe(9));
+    await waitFor(() => expect(result.current.transactions).toEqual([{ id: 'x' }]));
+  });
+
+  it('refresh never rejects when the api fails', async () => {
+    api.getWallet.mockRejectedValue(new Error('network down'));
+    api.getTransactions.mockRejectedValue(new Error('network down'));
+
+    const { result } = await renderHook(() => useContext(WalletContext), {
+      wrapper: authenticatedWrapper,
+    });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    await expect(result.current.refresh()).resolves.toBeUndefined();
   });
 });

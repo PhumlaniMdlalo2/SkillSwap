@@ -184,10 +184,7 @@ describe('groupSlotsByDay', () => {
   });
 
   it('groups slots that share the same day', () => {
-    const slots = [
-      slot('2024-05-15T09:00:00Z', 1),
-      slot('2024-05-15T11:00:00Z', 2),
-    ];
+    const slots = [slot('2024-05-15T09:00:00Z', 1), slot('2024-05-15T11:00:00Z', 2)];
     const groups = groupSlotsByDay(slots);
     expect(groups).toHaveLength(1);
     expect(groups[0].slots).toHaveLength(2);
@@ -196,10 +193,7 @@ describe('groupSlotsByDay', () => {
   });
 
   it('creates separate groups for different days', () => {
-    const slots = [
-      slot('2024-05-15T09:00:00Z', 1),
-      slot('2024-05-16T09:00:00Z', 2),
-    ];
+    const slots = [slot('2024-05-15T09:00:00Z', 1), slot('2024-05-16T09:00:00Z', 2)];
     const groups = groupSlotsByDay(slots);
     expect(groups).toHaveLength(2);
   });

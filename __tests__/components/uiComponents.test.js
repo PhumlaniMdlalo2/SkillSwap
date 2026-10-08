@@ -32,7 +32,7 @@ describe('Avatar', () => {
 
   it('skips the initials fallback when a uri is provided', async () => {
     const { queryByText } = await render(
-      <Avatar uri="https://example.com/pic.png" name="Ada Lovelace" />
+      <Avatar uri="https://example.com/pic.png" name="Ada Lovelace" />,
     );
     expect(queryByText('AL')).toBeNull();
   });
@@ -50,19 +50,31 @@ describe('Avatar', () => {
 
 describe('Card', () => {
   it('renders children', async () => {
-    const { getByText } = await render(<Card><Text>Hello</Text></Card>);
+    const { getByText } = await render(
+      <Card>
+        <Text>Hello</Text>
+      </Card>,
+    );
     expect(getByText('Hello')).toBeTruthy();
   });
 
   it('is pressable when onPress is provided', async () => {
     const onPress = jest.fn();
-    const { getByText } = await render(<Card onPress={onPress}><Text>Click me</Text></Card>);
+    const { getByText } = await render(
+      <Card onPress={onPress}>
+        <Text>Click me</Text>
+      </Card>,
+    );
     await fireEvent.press(getByText('Click me'));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('does not crash without onPress', async () => {
-    const { getByText } = await render(<Card><Text>Static</Text></Card>);
+    const { getByText } = await render(
+      <Card>
+        <Text>Static</Text>
+      </Card>,
+    );
     expect(getByText('Static')).toBeTruthy();
   });
 });

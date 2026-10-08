@@ -1,60 +1,119 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Switch, Pressable, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Switch,
+  Pressable,
+  ScrollView,
+  RefreshControl,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Button from '../../components/ui/Button';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../store/useAppHooks';
 import { useSwapStore } from '../../store/swapStore';
 import { swapService } from '../../services/swapService';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
+import { notify } from '../../utils/alert';
+import { toUserMessage } from '../../utils/errors';
 
 export default function SwapSettingsScreen() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { preferences, setPreferences } = useSwapStore();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const {
+    data: stored,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['swap-preferences', user?.user_id],
+    queryFn: () => swapService.getSwapPreferences(user.user_id),
+    enabled: Boolean(user),
+  });
 
   useEffect(() => {
-    swapService.getSwapPreferences(user.user_id).then((stored) => {
-      setPreferences(stored);
-      setLoading(false);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    if (stored) setPreferences(stored);
+  }, [stored, setPreferences]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await swapService.updateSwapPreferences(user.user_id, preferences);
+      await queryClient.invalidateQueries({ queryKey: ['swap-preferences'] });
       router.back();
+    } catch (err) {
+      notify('Could not save your settings', toUserMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <LoadingSpinner label="Loading preferences…" />;
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (isPending) return <LoadingSpinner label="Loading preferences…" />;
+  if (error) return <ErrorState error={error} onRetry={refetch} />;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Skill Match Settings</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          Platform.OS === 'web' ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          )
+        }
+      >
+        <Text style={styles.title} accessibilityRole="header">
+          Skill Match Settings
+        </Text>
 
         <Text style={styles.sectionLabel}>Skill category</Text>
         <View style={styles.chipRow}>
           <Pressable
             onPress={() => setPreferences({ skillCategory: null })}
+            accessibilityRole="button"
+            accessibilityState={{ selected: !preferences.skillCategory }}
             style={[styles.chip, !preferences.skillCategory && styles.chipActive]}
           >
-            <Text style={[styles.chipText, !preferences.skillCategory && styles.chipTextActive]}>Any</Text>
+            <Text style={[styles.chipText, !preferences.skillCategory && styles.chipTextActive]}>
+              Any
+            </Text>
           </Pressable>
           {SKILL_CATEGORIES.map((category) => (
             <Pressable
               key={category}
               onPress={() => setPreferences({ skillCategory: category })}
+              accessibilityRole="button"
+              accessibilityState={{ selected: preferences.skillCategory === category }}
               style={[styles.chip, preferences.skillCategory === category && styles.chipActive]}
             >
-              <Text style={[styles.chipText, preferences.skillCategory === category && styles.chipTextActive]}>
+              <Text
+                style={[
+                  styles.chipText,
+                  preferences.skillCategory === category && styles.chipTextActive,
+                ]}
+              >
                 {category}
               </Text>
             </Pressable>
@@ -66,12 +125,18 @@ export default function SwapSettingsScreen() {
           <Switch
             value={preferences.notificationsEnabled}
             onValueChange={(value) => setPreferences({ notificationsEnabled: value })}
+            accessibilityLabel="Notify me about new matches"
             trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
             thumbColor={preferences.notificationsEnabled ? COLORS.primary : COLORS.surface}
           />
         </View>
 
-        <Button title="Save Preferences" onPress={handleSave} loading={saving} style={{ marginTop: SPACING.lg }} />
+        <Button
+          title="Save Preferences"
+          onPress={handleSave}
+          loading={saving}
+          style={{ marginTop: SPACING.lg }}
+        />
       </ScrollView>
     </SafeAreaView>
   );

@@ -27,7 +27,11 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: COLORS.textFaint,
         tabBarStyle: { backgroundColor: COLORS.surface, borderTopColor: COLORS.border },
         tabBarIcon: ({ color, size, focused }) => (
-          <Ionicons name={`${ICONS[route.name]}${focused ? '' : '-outline'}`} size={size} color={color} />
+          <Ionicons
+            name={`${ICONS[route.name]}${focused ? '' : '-outline'}`}
+            size={size}
+            color={color}
+          />
         ),
       })}
     >
