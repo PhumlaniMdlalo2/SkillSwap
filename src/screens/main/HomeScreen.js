@@ -112,28 +112,34 @@ export default function HomeScreen() {
           </Card>
         )}
 
-        <View style={styles.quickActions}>
-          <QuickAction
-            icon="search"
-            label="Browse Skills"
-            onPress={() => router.push('/(tabs)/explore')}
-          />
-          <QuickAction
-            icon="add-circle"
-            label="Add a Skill"
-            onPress={() => router.push('/skills/add')}
-          />
-          <QuickAction
-            icon="sparkles"
-            label="Skill Match"
-            onPress={() => router.push('/(tabs)/swap')}
-          />
-          <QuickAction
-            icon="trophy"
-            label="Passport"
-            onPress={() => router.push('/passport')}
-          />
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickActionsScroll}
+        >
+          <View style={styles.quickActions}>
+            <QuickAction
+              icon="search"
+              label="Browse Skills"
+              onPress={() => router.push('/(tabs)/explore')}
+            />
+            <QuickAction
+              icon="add-circle"
+              label="Add a Skill"
+              onPress={() => router.push('/skills/add')}
+            />
+            <QuickAction
+              icon="sparkles"
+              label="Skill Match"
+              onPress={() => router.push('/(tabs)/swap')}
+            />
+            <QuickAction
+              icon="trophy"
+              label="Passport"
+              onPress={() => router.push('/passport')}
+            />
+          </View>
+        </ScrollView>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming sessions</Text>
@@ -228,15 +234,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
   },
+  quickActionsScroll: {
+    marginBottom: SPACING.lg,
+  },
   quickActions: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    marginBottom: SPACING.lg,
   },
   quickAction: {
-    flex: 1,
+    flex: 0,
     alignItems: 'center',
     paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    minWidth: 90,
   },
   quickActionIcon: {
     width: 40,

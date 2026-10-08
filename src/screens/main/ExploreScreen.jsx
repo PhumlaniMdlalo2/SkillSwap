@@ -128,18 +128,6 @@ export default function ExploreScreen() {
           <Text style={styles.title}>
             {isBountiesMode ? 'Bounty Board 🎯' : 'Explore Skills'}
           </Text>
-
-          {isBountiesMode && (
-            <Pressable
-              style={styles.postBountyBtn}
-              onPress={() => setIsCreateModalOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Post a Bounty"
-            >
-              <Ionicons name="add" size={18} color={COLORS.white} />
-              <Text style={styles.postBountyBtnText}>Post Request</Text>
-            </Pressable>
-          )}
         </View>
 
         {/* Mode Switcher Tabs */}
@@ -237,14 +225,9 @@ export default function ExploreScreen() {
               </View>
               <Text style={styles.emptyTitle}>No open bounties yet</Text>
               <Text style={styles.emptySubtitle}>
-                Need help with something? Post a bounty with a token or skill reward!
+                Need help with something? Tap Post Request below to create a bounty with a token or
+                skill reward!
               </Text>
-              <Pressable
-                style={styles.emptyActionBtn}
-                onPress={() => setIsCreateModalOpen(true)}
-              >
-                <Text style={styles.emptyActionText}>+ Post the First Bounty</Text>
-              </Pressable>
             </View>
           }
           renderItem={({ item }) => (
@@ -278,6 +261,19 @@ export default function ExploreScreen() {
         />
       )}
 
+      {/* Floating post button (bounties mode only) */}
+      {isBountiesMode && (
+        <Pressable
+          style={styles.fabPostBtn}
+          onPress={() => setIsCreateModalOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Post a Bounty"
+        >
+          <Ionicons name="add" size={22} color={COLORS.white} />
+          <Text style={styles.postBountyBtnText}>Post Request</Text>
+        </Pressable>
+      )}
+
       {/* Modal for posting new bounty */}
       <CreateBountyModal
         visible={isCreateModalOpen}
@@ -309,19 +305,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.text,
   },
-  postBountyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs + 2,
-    borderRadius: RADII.round,
-  },
   postBountyBtnText: {
     fontSize: FONT_SIZES.xs,
     fontWeight: '700',
     color: COLORS.white,
+  },
+  fabPostBtn: {
+    position: 'absolute',
+    right: SPACING.lg,
+    bottom: SPACING.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: RADII.round,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   segmentedControl: {
     flexDirection: 'row',
@@ -366,7 +370,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    paddingVertical: SPACING.sm + 4,
+    paddingVertical: SPACING.sm + 8,
     fontSize: FONT_SIZES.md,
     color: COLORS.text,
   },
@@ -425,17 +429,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: SPACING.lg,
-  },
-  emptyActionBtn: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm + 2,
-    borderRadius: RADII.round,
-  },
-  emptyActionText: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '700',
   },
   emptyText: {
     fontSize: FONT_SIZES.sm,

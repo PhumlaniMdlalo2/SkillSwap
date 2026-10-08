@@ -109,7 +109,7 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
               value={description}
               onChangeText={setDescription}
               multiline
-              numberOfLines={4}
+              numberOfLines={6}
               maxLength={500}
             />
 
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   multilineInput: {
-    minHeight: 80,
+    minHeight: 140,
     textAlignVertical: 'top',
   },
   chipsScroll: {
