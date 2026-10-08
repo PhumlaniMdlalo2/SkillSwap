@@ -1,1 +1,1 @@
-export { default } from '../../src/screens/main/SkillPassportScreen';
+export { default } from '../src/screens/main/SkillPassportScreen';

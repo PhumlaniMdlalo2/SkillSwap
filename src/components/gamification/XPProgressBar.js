@@ -11,18 +11,17 @@ import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
  *   compact     – smaller variant for inline use (default false)
  */
 export default function XPProgressBar({ xp = 0, levelInfo, compact = false }) {
-  const animatedWidth = useRef(new Animated.Value(0)).current;
   const progress = levelInfo?.progress ?? 0;
-  const progressPercent = Math.round(progress * 100);
+  const animatedValue = useRef(new Animated.Value(progress));
 
   useEffect(() => {
-    Animated.timing(animatedWidth, {
+    Animated.timing(animatedValue.current, {
       toValue: progress,
       duration: 800,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, [progress, animatedWidth]);
+  }, [progress]);
 
   const barHeight = compact ? 6 : 10;
   const xpNeeded = (levelInfo?.nextXp ?? 200) - xp;
@@ -45,7 +44,8 @@ export default function XPProgressBar({ xp = 0, levelInfo, compact = false }) {
             styles.barFill,
             {
               height: barHeight,
-              width: animatedWidth.interpolate({
+              // eslint-disable-next-line react-hooks/refs
+              width: animatedValue.current.interpolate({
                 inputRange: [0, 1],
                 outputRange: ['0%', '100%'],
               }),
