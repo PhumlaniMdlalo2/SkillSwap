@@ -101,6 +101,10 @@ create table public.sessions (
   session_date timestamptz not null,
   duration integer not null default 60 check (duration > 0),
   status public.session_status not null default 'pending',
+  teacher_checked_in_at timestamptz,
+  learner_checked_in_at timestamptz,
+  teacher_confirmed_at timestamptz,
+  learner_confirmed_at timestamptz,
   created_at timestamptz not null default now(),
   constraint sessions_distinct_parties check (teacher_id <> learner_id)
 );
@@ -515,7 +519,110 @@ begin
 end;
 $$;
 
+-- Session check-in: each party scans the other's QR (whose payload carries the
+-- owner's role) to confirm they actually met. The payload also carries codeExp
+-- (unix seconds), so screenshotted codes expire within ~a minute. Matches
+-- supabase.rpc('check_in_session', { p_session_id, p_owner_role, p_code_exp }).
+create or replace function public.check_in_session(p_session_id uuid, p_owner_role text, p_code_exp bigint)
+returns public.sessions
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.sessions;
+  v_caller_role text;
+begin
+  if p_code_exp is not null and (floor(extract(epoch from now())) - p_code_exp) > 15 then
+    raise exception 'This check-in code has expired. Ask your partner to show a fresh one.';
+  end if;
+
+  select * into v_session from public.sessions where session_id = p_session_id for update;
+  if not found then
+    raise exception 'Session not found';
+  end if;
+  if v_session.status <> 'pending' then
+    raise exception 'Only pending sessions can be checked in';
+  end if;
+
+  if v_session.teacher_id = auth.uid() then
+    v_caller_role := 'teacher';
+  elsif v_session.learner_id = auth.uid() then
+    v_caller_role := 'learner';
+  else
+    raise exception 'Only participants can check in to this session';
+  end if;
+
+  if p_owner_role not in ('teacher', 'learner') then
+    raise exception 'Invalid check-in code';
+  end if;
+  if p_owner_role = v_caller_role then
+    raise exception 'Scan your partner''s code, not your own';
+  end if;
+
+  if v_caller_role = 'teacher' then
+    update public.sessions
+      set teacher_checked_in_at = coalesce(teacher_checked_in_at, now())
+      where session_id = p_session_id
+      returning * into v_session;
+  else
+    update public.sessions
+      set learner_checked_in_at = coalesce(learner_checked_in_at, now())
+      where session_id = p_session_id
+      returning * into v_session;
+  end if;
+
+  return v_session;
+end;
+$$;
+
+-- Each participant explicitly confirms the trade happened (on top of presence
+-- via check-in). Matches supabase.rpc('confirm_session_side', { p_session_id }).
+create or replace function public.confirm_session_side(p_session_id uuid)
+returns public.sessions
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.sessions;
+begin
+  select * into v_session from public.sessions where session_id = p_session_id for update;
+  if not found then
+    raise exception 'Session not found';
+  end if;
+  if v_session.status <> 'pending' then
+    raise exception 'Only pending sessions can be confirmed';
+  end if;
+
+  if v_session.teacher_id = auth.uid() then
+    if v_session.teacher_checked_in_at is null then
+      raise exception 'You need to check in before confirming the trade';
+    end if;
+    update public.sessions
+      set teacher_confirmed_at = coalesce(teacher_confirmed_at, now())
+      where session_id = p_session_id
+      returning * into v_session;
+  elsif v_session.learner_id = auth.uid() then
+    if v_session.learner_checked_in_at is null then
+      raise exception 'You need to check in before confirming the trade';
+    end if;
+    update public.sessions
+      set learner_confirmed_at = coalesce(learner_confirmed_at, now())
+      where session_id = p_session_id
+      returning * into v_session;
+  else
+    raise exception 'Only participants can confirm this session';
+  end if;
+
+  return v_session;
+end;
+$$;
+
 -- Complete Session -> Earn Tokens. Matches supabase.rpc('complete_session', { p_session_id }).
+-- Requires both check-ins AND both trade confirmations, unless the 72h
+-- auto-finalize deadline (anchored to the last check-in) has passed, in which
+-- case a single confirmation suffices.
 create or replace function public.complete_session(p_session_id uuid)
 returns public.sessions
 language plpgsql
@@ -526,6 +633,7 @@ declare
   v_reward integer;
   v_session public.sessions;
   v_skill_title text;
+  v_deadline timestamptz;
 begin
   select * into v_session from public.sessions where session_id = p_session_id for update;
   if not found then
@@ -536,6 +644,20 @@ begin
   end if;
   if v_session.status <> 'pending' then
     raise exception 'Only pending sessions can be completed';
+  end if;
+  if v_session.teacher_checked_in_at is null or v_session.learner_checked_in_at is null then
+    raise exception 'Both people need to check in before this session can be completed';
+  end if;
+
+  if v_session.teacher_confirmed_at is null or v_session.learner_confirmed_at is null then
+    v_deadline := greatest(v_session.teacher_checked_in_at, v_session.learner_checked_in_at)
+                    + interval '72 hours';
+    if now() > v_deadline and (v_session.teacher_confirmed_at is not null or v_session.learner_confirmed_at is not null) then
+      -- Auto-finalize: the partner never confirmed within the deadline.
+      null;
+    else
+      raise exception 'Waiting for both of you to confirm the trade (auto-completes 72 hours after check-in)';
+    end if;
   end if;
 
   -- Pay whatever the learner was actually charged, not a flat amount —
@@ -562,6 +684,66 @@ begin
   values (v_session.teacher_id, p_session_id, 'earn', v_reward, 'Taught ' || coalesce(v_skill_title, 'a session'));
 
   return v_session;
+end;
+$$;
+
+-- Lazy 72h sweep: finalises any of the caller's pending sessions that are
+-- eligible (both checked in and either fully confirmed or past the deadline
+-- with one side confirmed). Idempotent — completion flips status, so a
+-- second sweep skips them. Returns the number completed.
+create or replace function public.finalize_stale_sessions()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session record;
+  v_reward integer;
+  v_skill_title text;
+  v_count integer := 0;
+begin
+  for v_session in
+    select *
+    from public.sessions
+    where status = 'pending'
+      and (teacher_id = auth.uid() or learner_id = auth.uid())
+      and teacher_checked_in_at is not null
+      and learner_checked_in_at is not null
+    for update skip locked
+  loop
+    if not (
+      v_session.teacher_confirmed_at is not null and v_session.learner_confirmed_at is not null
+    ) and not (
+      now() > greatest(v_session.teacher_checked_in_at, v_session.learner_checked_in_at) + interval '72 hours'
+      and (v_session.teacher_confirmed_at is not null or v_session.learner_confirmed_at is not null)
+    ) then
+      continue;
+    end if;
+
+    select abs(amount) into v_reward
+    from public.token_transactions
+    where session_id = v_session.session_id and type = 'spend'
+    limit 1;
+    v_reward := coalesce(v_reward, 1);
+
+    select s.title into v_skill_title
+    from public.availability a
+    join public.skills s on s.skill_id = a.skill_id
+    where a.availability_id = v_session.availability_id;
+
+    update public.sessions set status = 'completed' where session_id = v_session.session_id;
+
+    update public.token_wallet set balance = balance + v_reward, updated_at = now()
+    where user_id = v_session.teacher_id;
+
+    insert into public.token_transactions (user_id, session_id, type, amount, description)
+    values (v_session.teacher_id, v_session.session_id, 'earn', v_reward, 'Taught ' || coalesce(v_skill_title, 'a session'));
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
 end;
 $$;
 
@@ -990,7 +1172,10 @@ $$;
 grant execute on function public.request_session(uuid, text) to authenticated;
 grant execute on function public.respond_to_request(uuid, boolean) to authenticated;
 grant execute on function public.schedule_session(uuid, uuid[]) to authenticated;
+grant execute on function public.check_in_session(uuid, text, bigint) to authenticated;
+grant execute on function public.confirm_session_side(uuid) to authenticated;
 grant execute on function public.complete_session(uuid) to authenticated;
+grant execute on function public.finalize_stale_sessions() to authenticated;
 grant execute on function public.cancel_session(uuid) to authenticated;
 grant execute on function public.generate_availability_slots(uuid, integer) to authenticated;
 grant execute on function public.set_availability_hours(uuid, jsonb) to authenticated;
@@ -1324,6 +1509,173 @@ create policy "Creators can update offer status"
       where b.bounty_id = bounty_offers.bounty_id and b.creator_id = auth.uid()
     )
   );
+
+-- ---------------------------------------------------------
+-- trades — skill-trade proof for swap-reward bounties. Accepting an
+-- offer creates a trade; it is only recorded as done once both parties
+-- confirm a reciprocal lesson happened (72h auto-finalize for the eager
+-- side). Swap bounties cannot be marked complete without a confirmed trade.
+-- ---------------------------------------------------------
+create table public.trades (
+  trade_id uuid primary key default gen_random_uuid(),
+  bounty_id uuid not null unique references public.bounties(bounty_id) on delete cascade,
+  creator_id uuid not null references public.users(user_id),
+  helper_id uuid not null references public.users(user_id),
+  status text not null default 'in_progress' check (status in ('in_progress', 'completed', 'cancelled')),
+  creator_confirmed_at timestamptz,
+  helper_confirmed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz,
+  constraint trades_distinct_parties check (creator_id <> helper_id)
+);
+
+create index trades_status_idx on public.trades(status);
+create index trades_creator_id_idx on public.trades(creator_id);
+create index trades_helper_id_idx on public.trades(helper_id);
+
+alter table public.trades enable row level security;
+
+create policy "Trade participants can view their trade"
+  on public.trades for select
+  using (auth.uid() = creator_id or auth.uid() = helper_id);
+
+-- Creator picks an offer -> swap begins. Matches
+-- supabase.rpc('accept_bounty_offer', { p_bounty_id, p_offer_id }).
+create or replace function public.accept_bounty_offer(p_bounty_id uuid, p_offer_id uuid)
+returns public.trades
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_bounty public.bounties;
+  v_offer public.bounty_offers;
+  v_trade public.trades;
+begin
+  select * into v_bounty from public.bounties where bounty_id = p_bounty_id for update;
+  if not found then
+    raise exception 'Bounty not found';
+  end if;
+  if v_bounty.creator_id <> auth.uid() then
+    raise exception 'Only the bounty creator can accept an offer';
+  end if;
+  if v_bounty.status <> 'open' then
+    raise exception 'Only open bounties can accept offers';
+  end if;
+
+  select * into v_offer from public.bounty_offers where offer_id = p_offer_id for update;
+  if not found then
+    raise exception 'Offer not found';
+  end if;
+  if v_offer.bounty_id <> p_bounty_id then
+    raise exception 'This offer belongs to a different bounty';
+  end if;
+  if v_offer.status <> 'pending' then
+    raise exception 'Only pending offers can be accepted';
+  end if;
+
+  update public.bounty_offers set status = 'accepted' where offer_id = p_offer_id;
+  update public.bounty_offers set status = 'declined'
+    where bounty_id = p_bounty_id and offer_id <> p_offer_id and status = 'pending';
+  update public.bounties set status = 'in_progress', updated_at = now()
+    where bounty_id = p_bounty_id;
+
+  insert into public.trades (bounty_id, creator_id, helper_id)
+  values (p_bounty_id, v_bounty.creator_id, v_offer.helper_id)
+  returning * into v_trade;
+
+  return v_trade;
+end;
+$$;
+
+-- Participant attests they did their side; completes (and marks the bounty
+-- completed) once both confirm, or 72h after acceptance if only one side
+-- ever confirms. Matches supabase.rpc('confirm_trade_side', { p_trade_id }).
+create or replace function public.confirm_trade_side(p_trade_id uuid)
+returns public.trades
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_trade public.trades;
+  v_role text;
+begin
+  select * into v_trade from public.trades where trade_id = p_trade_id for update;
+  if not found then
+    raise exception 'Trade not found';
+  end if;
+  if auth.uid() = v_trade.creator_id then
+    v_role := 'creator';
+  elsif auth.uid() = v_trade.helper_id then
+    v_role := 'helper';
+  else
+    raise exception 'Only trade participants can confirm';
+  end if;
+  if v_trade.status <> 'in_progress' then
+    raise exception 'This trade is not in progress';
+  end if;
+
+  if v_role = 'creator' then
+    update public.trades
+      set creator_confirmed_at = coalesce(creator_confirmed_at, now())
+      where trade_id = p_trade_id
+      returning * into v_trade;
+  else
+    update public.trades
+      set helper_confirmed_at = coalesce(helper_confirmed_at, now())
+      where trade_id = p_trade_id
+      returning * into v_trade;
+  end if;
+
+  if (v_trade.creator_confirmed_at is not null and v_trade.helper_confirmed_at is not null)
+    or (
+      now() > v_trade.created_at + interval '72 hours'
+      and (v_trade.creator_confirmed_at is not null or v_trade.helper_confirmed_at is not null)
+    ) then
+    update public.trades set status = 'completed', updated_at = now()
+      where trade_id = p_trade_id
+      returning * into v_trade;
+    update public.bounties set status = 'completed', updated_at = now()
+      where bounty_id = v_trade.bounty_id;
+  else
+    update public.trades set updated_at = now()
+      where trade_id = p_trade_id
+      returning * into v_trade;
+  end if;
+
+  return v_trade;
+end;
+$$;
+
+grant execute on function public.accept_bounty_offer(uuid, uuid) to authenticated;
+grant execute on function public.confirm_trade_side(uuid) to authenticated;
+
+-- Guard: a swap-reward bounty can only reach 'completed' via a confirmed
+-- trade. Token bounties keep the one-tap flow.
+create or replace function public.bounties_guard_completion()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.status = 'completed' and old.status <> 'completed' and old.reward_type = 'swap' then
+    if not exists (
+      select 1 from public.trades t
+      where t.bounty_id = old.bounty_id and t.status = 'completed'
+    ) then
+      raise exception 'Skill-trade bounties must be confirmed by both sides before completion';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists bounties_guard_completion_trg on public.bounties;
+create trigger bounties_guard_completion_trg
+  before update on public.bounties
+  for each row execute function public.bounties_guard_completion();
 
 -- ---------------------------------------------------------
 -- Skill Passport & Gamification (Streaks + XP)

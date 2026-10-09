@@ -10,6 +10,9 @@ import {
   getTransactions,
   setLearningInterests,
   uploadAvatar,
+  checkInSession,
+  confirmSessionSide,
+  finalizeStaleSessions,
 } from '../../src/services/api';
 
 jest.mock('../../src/services/supabase', () => ({
@@ -208,6 +211,56 @@ describe('api service', () => {
     });
   });
 
+  describe('checkInSession', () => {
+    it('calls the check_in_session rpc with the scanned role and code expiry', async () => {
+      supabase.rpc.mockResolvedValue({ data: { session_id: 's1' }, error: null });
+
+      const result = await checkInSession({ sessionId: 's1', ownerRole: 'learner', codeExp: 1770000000 });
+
+      expect(supabase.rpc).toHaveBeenCalledWith('check_in_session', {
+        p_session_id: 's1',
+        p_owner_role: 'learner',
+        p_code_exp: 1770000000,
+      });
+      expect(result).toEqual({ session_id: 's1' });
+    });
+
+    it('throws when the rpc errors', async () => {
+      supabase.rpc.mockResolvedValue({ data: null, error: new Error('nope') });
+
+      await expect(
+        checkInSession({ sessionId: 's1', ownerRole: 'teacher', codeExp: 1770000000 }),
+      ).rejects.toThrow('nope');
+    });
+  });
+
+  describe('confirmSessionSide', () => {
+    it('calls the confirm_session_side rpc for the session', async () => {
+      supabase.rpc.mockResolvedValue({
+        data: { session_id: 's1', teacher_confirmed_at: '2026-10-09T10:00:00Z' },
+        error: null,
+      });
+
+      const result = await confirmSessionSide('s1');
+
+      expect(supabase.rpc).toHaveBeenCalledWith('confirm_session_side', {
+        p_session_id: 's1',
+      });
+      expect(result.teacher_confirmed_at).toBe('2026-10-09T10:00:00Z');
+    });
+  });
+
+  describe('finalizeStaleSessions', () => {
+    it('calls the finalize_stale_sessions sweep rpc', async () => {
+      supabase.rpc.mockResolvedValue({ data: 2, error: null });
+
+      const result = await finalizeStaleSessions();
+
+      expect(supabase.rpc).toHaveBeenCalledWith('finalize_stale_sessions');
+      expect(result).toBe(2);
+    });
+  });
+
   describe('uploadAvatar', () => {
     it('uploads the fetched file, generates a timestamped URL, and updates the user', async () => {
       global.fetch = jest.fn().mockResolvedValue({
@@ -221,6 +274,21 @@ describe('api service', () => {
       const update = builderCalls.find((c) => c.method === 'update');
       expect(update.args[0].avatar).toMatch(/^https:\/\/cdn\.example\/avatar\.png\?t=\d+$/);
 
+      expect(result).toEqual({ user_id: 'u1' });
+      delete global.fetch;
+    });
+
+    it('decodes base64 from the picker without fetching the local file', async () => {
+      global.fetch = jest.fn();
+      mockFromResult({ data: { user_id: 'u1' }, error: null });
+
+      const result = await uploadAvatar({ userId: 'u1', base64: 'aGVsbG8=' });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      const { upload } = supabase.storage.from.mock.results[0].value;
+      const [, buffer] = upload.mock.calls[upload.mock.calls.length - 1];
+      expect(buffer.byteLength).toBe(5);
+      expect(new TextDecoder().decode(new Uint8Array(buffer))).toBe('hello');
       expect(result).toEqual({ user_id: 'u1' });
       delete global.fetch;
     });

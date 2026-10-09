@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
-export default function LoginForm({ onSubmit, loading, error }) {
+export default function LoginForm({ onSubmit, loading, error, onForgotPassword, forgotLoading }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -35,6 +35,20 @@ export default function LoginForm({ onSubmit, loading, error }) {
         loading={loading}
         style={{ marginTop: SPACING.sm }}
       />
+      {onForgotPassword ? (
+        <Pressable
+          onPress={() => onForgotPassword(email.trim())}
+          disabled={forgotLoading}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password"
+          style={styles.forgotWrap}
+        >
+          <Text style={styles.forgotText}>
+            {forgotLoading ? 'Sending code…' : 'Forgot password?'}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -44,5 +58,16 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
     fontSize: FONT_SIZES.sm,
     marginBottom: SPACING.sm,
+  },
+  forgotWrap: {
+    alignSelf: 'center',
+    marginTop: SPACING.sm + 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  forgotText: {
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
   },
 });

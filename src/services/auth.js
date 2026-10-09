@@ -47,6 +47,44 @@ export async function signOut() {
   if (error) throw error;
 }
 
+// Sends a 6-digit code via the Email OTP template. shouldCreateUser: false
+// keeps "forgot password" from silently creating accounts. No emailRedirectTo:
+// that would switch GoTrue to a Magic Link email carrying a long token that
+// doesn't match the app's 6-digit code screen.
+export async function requestPasswordReset(email) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: false,
+    },
+  });
+  if (error) throw error;
+}
+
+// Exchanges the emailed code for a session, so the reset screen can call
+// updateUser straight away — no deep link involved.
+//
+// This must verify as type 'recovery', not 'email': because requestPasswordReset
+// sends create_user=false, GoTrue treats it as a password-recovery OTP and stores
+// the code against recovery_token. Type 'email' would hash-check against the
+// wrong token column and reject even the correct code.
+export async function verifyResetCode(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'recovery',
+  });
+  if (error) throw error;
+  return fetchProfile(data.user);
+}
+
+// Requires a live session — the app only lands here after the recovery
+// deep link has been exchanged for one.
+export async function updatePassword(password) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 export async function getStoredUser() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
