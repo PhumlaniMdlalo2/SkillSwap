@@ -27,6 +27,12 @@
           "photosPermission": "SkillSwap needs access to your photos so you can set a profile picture."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SkillSwap needs access to your camera so you can scan your partner's check-in code."
+        }
+      ],
       "expo-status-bar",
       "expo-font",
       [

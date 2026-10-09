@@ -121,6 +121,7 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
+      base64: true,
     });
     if (result.canceled) return;
 
@@ -130,6 +131,7 @@ export default function ProfileScreen() {
       const updated = await api.uploadAvatar({
         userId: user.user_id,
         uri: asset.uri,
+        base64: asset.base64,
         mimeType: asset.mimeType ?? 'image/jpeg',
       });
       updateUser(updated);

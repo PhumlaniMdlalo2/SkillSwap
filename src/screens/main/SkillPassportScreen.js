@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import Card from '../../components/ui/Card';
 import Avatar from '../../components/ui/Avatar';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import ErrorState from '../../components/ui/ErrorState';
 import XPProgressBar from '../../components/gamification/XPProgressBar';
 import StreakCard from '../../components/gamification/StreakCard';
 import BadgeGrid from '../../components/gamification/BadgeGrid';
@@ -26,7 +25,6 @@ export default function SkillPassportScreen() {
   const {
     data: stats,
     isPending: statsPending,
-    error: statsError,
     refetch: refetchStats,
   } = useQuery({
     queryKey: ['user-stats', user?.user_id],
@@ -37,7 +35,6 @@ export default function SkillPassportScreen() {
   const {
     data: endorsements = [],
     isPending: endorsementsPending,
-    error: endorsementsError,
     refetch: refetchEndorsements,
   } = useQuery({
     queryKey: ['endorsements', user?.user_id],
@@ -79,10 +76,8 @@ export default function SkillPassportScreen() {
   };
 
   const loading = statsPending || endorsementsPending;
-  const error = statsError || endorsementsError;
 
   if (loading) return <LoadingSpinner label="Loading your passport…" />;
-  if (error) return <ErrorState error={error} onRetry={onRefresh} />;
 
   const xp = stats?.xp ?? 0;
   const levelInfo = stats?.levelInfo ?? { level: 1, title: 'Novice', progress: 0, minXp: 0, nextXp: 200 };

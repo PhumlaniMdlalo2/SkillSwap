@@ -20,6 +20,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { bountyService } from '../../services/bountyService';
+import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
 import { notify } from '../../utils/alert';
 
@@ -114,6 +115,40 @@ export default function ExploreScreen() {
     }
   };
 
+  // Skill-trade proof: the creator accepts an offer to open a swap.
+  const handleAcceptOffer = async (bountyId, offerId) => {
+    try {
+      await bountyService.acceptOffer({ bountyId, offerId });
+      await queryClient.invalidateQueries({ queryKey: ['bounties'] });
+      notify('Offer accepted! 🤝', 'The skill swap has started — both sides now confirm the trade.');
+    } catch (err) {
+      notify('Error', err.message || 'Could not accept offer.');
+    }
+  };
+
+  // Each side confirms they did their part; completion releases +25 XP to both.
+  const handleConfirmTrade = async (tradeId) => {
+    if (!user) return;
+    try {
+      const trade = await bountyService.confirmTradeSide(tradeId);
+      await queryClient.invalidateQueries({ queryKey: ['bounties'] });
+      if (trade?.status === 'completed') {
+        try {
+          await gamificationService.awardXpAndStreak(trade.creatorId, 25);
+          await gamificationService.awardXpAndStreak(trade.helperId, 25);
+        } catch (_xpErr) {
+          // Non-blocking gamification award
+        }
+        await queryClient.invalidateQueries({ queryKey: ['user-stats'] });
+        notify('Skill trade confirmed! 🎉', 'Both sides verified the swap. You each earned +25 XP.');
+      } else {
+        notify('Trade confirmed 🤝', 'Waiting for your swap partner to confirm theirs.');
+      }
+    } catch (err) {
+      notify('Error', err.message || 'Could not confirm trade.');
+    }
+  };
+
   const isBountiesMode = mode === 'bounties';
   const currentError = isBountiesMode ? bountiesError : skillsError;
   const currentRefetch = isBountiesMode ? refetchBounties : refetchSkills;
@@ -170,11 +205,7 @@ export default function ExploreScreen() {
           <Ionicons name="search" size={18} color={COLORS.textFaint} />
           <TextInput
             style={styles.searchInput}
-            placeholder={
-              isBountiesMode
-                ? 'Search requests, e.g. React help, cooking…'
-                : 'Search skills, e.g. piano, Spanish…'
-            }
+            placeholder={isBountiesMode ? 'Search requests' : 'Search skills'}
             placeholderTextColor={COLORS.textFaint}
             value={searchInput}
             onChangeText={setSearchInput}
@@ -237,6 +268,8 @@ export default function ExploreScreen() {
               onMakeOffer={handleMakeOffer}
               onDeleteBounty={handleDeleteBounty}
               onCloseBounty={handleCloseBounty}
+              onAcceptOffer={handleAcceptOffer}
+              onConfirmTrade={handleConfirmTrade}
             />
           )}
         />

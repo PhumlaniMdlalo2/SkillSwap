@@ -1,6 +1,21 @@
 import { supabase } from './supabase';
 
+function mapTrade(row) {
+  if (!row) return null;
+  return {
+    id: row.trade_id,
+    bountyId: row.bounty_id,
+    creatorId: row.creator_id,
+    helperId: row.helper_id,
+    status: row.status,
+    creatorConfirmedAt: row.creator_confirmed_at,
+    helperConfirmedAt: row.helper_confirmed_at,
+    createdAt: row.created_at,
+  };
+}
+
 function mapBounty(row) {
+  const rawTrade = Array.isArray(row.trades) ? row.trades[0] : row.trades;
   return {
     id: row.bounty_id,
     creatorId: row.creator_id,
@@ -23,14 +38,17 @@ function mapBounty(row) {
       createdAt: o.created_at,
       helper: o.helper ?? null,
     })),
+    trade: mapTrade(rawTrade ?? null),
   };
 }
+
+const BOUNTY_SELECT = '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(helper:helper_id(user_id, name, avatar)), trades!bounty_id(*)';
 
 export const bountyService = {
   async getBounties({ category, search, status = 'open' } = {}) {
     let query = supabase
       .from('bounties')
-      .select('*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(*)')
+      .select(BOUNTY_SELECT)
       .order('created_at', { ascending: false });
 
     if (status) {
@@ -53,7 +71,7 @@ export const bountyService = {
     const { data, error } = await supabase
       .from('bounties')
       .select(
-        '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(*, helper:helper_id(user_id, name, avatar))',
+        '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(*, helper:helper_id(user_id, name, avatar)), trades!bounty_id(*)',
       )
       .eq('bounty_id', bountyId)
       .maybeSingle();
@@ -154,5 +172,25 @@ export const bountyService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // Skill-trade proof: the creator accepts an offer, opening a verified swap.
+  async acceptOffer({ bountyId, offerId }) {
+    const { data, error } = await supabase.rpc('accept_bounty_offer', {
+      p_bounty_id: bountyId,
+      p_offer_id: offerId,
+    });
+    if (error) throw error;
+    return mapTrade(data);
+  },
+
+  // Each participant confirms they did their side; completes when both have
+  // (or the 72h deadline passes with one side). Returns the updated trade.
+  async confirmTradeSide(tradeId) {
+    const { data, error } = await supabase.rpc('confirm_trade_side', {
+      p_trade_id: tradeId,
+    });
+    if (error) throw error;
+    return mapTrade(data);
   },
 };

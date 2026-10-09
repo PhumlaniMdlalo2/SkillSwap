@@ -45,6 +45,12 @@ function RootStack() {
     >
       {/* Unguarded: acts as the redirect anchor for failed guards */}
       <Stack.Screen name="index" />
+      {/* Unguarded: a recovery deep link lands here before auth state has
+          settled; the screen itself bounces to login if there's no session. */}
+      <Stack.Screen name="reset-password" />
+      {/* Unguarded: entered straight from login while still signed out; a
+          successful code verification lands on reset-password. */}
+      <Stack.Screen name="verify-code" />
       <Stack.Protected guard={!isAuthenticated}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
@@ -73,6 +79,10 @@ function RootStack() {
         <Stack.Screen
           name="sessions/[id]/index"
           options={{ headerShown: true, title: 'Session' }}
+        />
+        <Stack.Screen
+          name="sessions/[id]/check-in"
+          options={{ headerShown: true, title: 'Check In', presentation: 'modal' }}
         />
         <Stack.Screen
           name="sessions/[id]/review"

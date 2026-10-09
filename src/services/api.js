@@ -215,6 +215,38 @@ export async function scheduleSession({ requestId, availabilityIds }) {
   return data;
 }
 
+// Step 4: each party scans the other's QR to confirm attendance. ownerRole is
+// the role encoded in the scanned code (the partner's), so the server records
+// the caller as present and rejects a scan of the caller's own code. codeExp
+// is the scanned payload's unix-seconds expiry, which the server validates so
+// screenshotted codes can't be reused.
+export async function checkInSession({ sessionId, ownerRole, codeExp }) {
+  const { data, error } = await supabase.rpc('check_in_session', {
+    p_session_id: sessionId,
+    p_owner_role: ownerRole,
+    p_code_exp: codeExp,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Step 5: each participant explicitly confirms the trade happened.
+export async function confirmSessionSide(sessionId) {
+  const { data, error } = await supabase.rpc('confirm_session_side', {
+    p_session_id: sessionId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Lazy 72h sweep: completes any of the caller's pending sessions that have
+// met their confirmation deadline. Idempotent; returns the count completed.
+export async function finalizeStaleSessions() {
+  const { data, error } = await supabase.rpc('finalize_stale_sessions');
+  if (error) throw error;
+  return data;
+}
+
 // Complete Session -> Earn Tokens.
 export async function completeSession(sessionId) {
   const { data, error } = await supabase.rpc('complete_session', {
@@ -268,16 +300,49 @@ export async function getUserById(userId) {
   return data;
 }
 
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const BASE64_LOOKUP = (() => {
+  const table = new Uint8Array(256);
+  for (let i = 0; i < BASE64_CHARS.length; i += 1) table[BASE64_CHARS.charCodeAt(i)] = i;
+  return table;
+})();
+
+// Decodes a base64 payload into the underlying ArrayBuffer. We take the image
+// as base64 straight from the image picker instead of fetching the local
+// file:// URI — on Android that fetch resolves with a tiny, non-image body.
+function base64ToArrayBuffer(base64) {
+  const comma = base64.indexOf(',');
+  const clean = (comma === -1 ? base64 : base64.slice(comma + 1)).replace(/\s/g, '');
+  const length = clean.length;
+  let bufferLength = Math.floor(length / 4) * 3;
+  if (clean[length - 1] === '=') bufferLength -= 1;
+  if (clean[length - 2] === '=') bufferLength -= 2;
+
+  const bytes = new Uint8Array(bufferLength);
+  let p = 0;
+  for (let i = 0; i < length; i += 4) {
+    const e1 = BASE64_LOOKUP[clean.charCodeAt(i)];
+    const e2 = BASE64_LOOKUP[clean.charCodeAt(i + 1)];
+    const e3 = BASE64_LOOKUP[clean.charCodeAt(i + 2)];
+    const e4 = BASE64_LOOKUP[clean.charCodeAt(i + 3)];
+    bytes[p++] = (e1 << 2) | (e2 >> 4);
+    if (p < bufferLength) bytes[p++] = ((e2 & 15) << 4) | (e3 >> 2);
+    if (p < bufferLength) bytes[p++] = ((e3 & 3) << 6) | (e4 & 63);
+  }
+  return bytes.buffer;
+}
+
 // Uploads to the same path every time (upsert) so a user only ever has one
 // avatar file, then stamps the stored URL with a cache-busting query param —
 // otherwise the browser/Image cache would keep showing the old photo forever
 // since the underlying file path never changes.
-export async function uploadAvatar({ userId, uri, mimeType = 'image/jpeg' }) {
+export async function uploadAvatar({ userId, uri, base64, mimeType = 'image/jpeg' }) {
   const ext = mimeType.split('/')[1] || 'jpg';
   const path = `${userId}/avatar.${ext}`;
 
-  const response = await fetch(uri);
-  const arrayBuffer = await response.arrayBuffer();
+  const arrayBuffer = base64
+    ? base64ToArrayBuffer(base64)
+    : await (await fetch(uri)).arrayBuffer();
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')

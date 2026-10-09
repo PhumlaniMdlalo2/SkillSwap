@@ -5,12 +5,14 @@ import { router } from 'expo-router';
 import LoginForm from '../../components/auth/LoginForm';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../store/useAppHooks';
+import { requestPasswordReset } from '../../services/auth';
 import { toUserMessage } from '../../utils/errors';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function LoginScreen() {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const handleSubmit = async ({ email, password }) => {
@@ -26,6 +28,23 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = async (email) => {
+    if (!email) {
+      setError('Enter your email above, then tap "Forgot password?"');
+      return;
+    }
+    setError(null);
+    setForgotLoading(true);
+    try {
+      await requestPasswordReset(email);
+      router.push({ pathname: '/verify-code', params: { email } });
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not send the code. Please try again.'));
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -36,7 +55,13 @@ export default function LoginScreen() {
           <Text style={styles.title}>Welcome back</Text>
           <Text style={styles.subtitle}>Log in to keep swapping skills.</Text>
 
-          <LoginForm onSubmit={handleSubmit} loading={loading} error={error} />
+          <LoginForm
+            onSubmit={handleSubmit}
+            loading={loading}
+            error={error}
+            onForgotPassword={handleForgotPassword}
+            forgotLoading={forgotLoading}
+          />
 
           <Button
             title="Create an account"

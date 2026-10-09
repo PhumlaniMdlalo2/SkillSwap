@@ -30,6 +30,12 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
 
   const isValid = title.trim().length >= 5 && description.trim().length >= 10 && category;
 
+  const missingHint = isValid
+    ? null
+    : title.trim().length < 5
+      ? `Title needs at least 5 characters (${title.trim().length}/5)`
+      : `Details need at least 10 characters (${description.trim().length}/10)`;
+
   const handleCreate = () => {
     if (!isValid || submitting) return;
     onSubmit({
@@ -190,6 +196,7 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
 
           {/* Footer Actions */}
           <View style={styles.footer}>
+            {missingHint && <Text style={styles.validationHint}>{missingHint}</Text>}
             <Button
               title="Post Bounty"
               onPress={handleCreate}
@@ -373,5 +380,11 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  validationHint: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.danger,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
   },
 });

@@ -20,6 +20,8 @@ export default function BountyCard({
   onMakeOffer,
   onDeleteBounty,
   onCloseBounty,
+  onAcceptOffer,
+  onConfirmTrade,
 }) {
   const [showOfferInput, setShowOfferInput] = useState(false);
   const [offerMessage, setOfferMessage] = useState('');
@@ -28,6 +30,13 @@ export default function BountyCard({
   const isOwner = bounty.creatorId === currentUserId;
   const hasOffered = bounty.offers?.some((o) => o.helperId === currentUserId);
   const urgencyStyle = URGENCY_CONFIG[bounty.urgency] ?? URGENCY_CONFIG.flexible;
+  const isSwap = bounty.rewardType === 'swap';
+  const trade = bounty.trade ?? null;
+  const tradeInProgress = trade?.status === 'in_progress';
+  const tradeDone = trade?.status === 'completed';
+  const myTradeConfirmed = trade && (isOwner ? trade.creatorConfirmedAt : trade.helperConfirmedAt);
+  const partnerTradeConfirmed = trade && (isOwner ? trade.helperConfirmedAt : trade.creatorConfirmedAt);
+  const isTradePartner = trade && (trade.creatorId === currentUserId || trade.helperId === currentUserId);
 
   const handleSubmitOffer = async () => {
     if (submittingOffer) return;
@@ -149,6 +158,70 @@ export default function BountyCard({
         </View>
       )}
 
+      {/* Skill-trade proof: swap bounties need an accepted offer + two-sided
+          confirmation before they can complete. */}
+      {isOwner && isSwap && bounty.status === 'open' && bounty.offers?.length > 0 && (
+        <View style={styles.tradeSection}>
+          <Text style={styles.tradeSectionTitle}>Offers — pick the swap</Text>
+          {bounty.offers.map((offer) => (
+            <View key={offer.id} style={styles.offerRow}>
+              <Avatar uri={offer.helper?.avatar} name={offer.helper?.name} size={28} />
+              <View style={styles.offerMeta}>
+                <Text style={styles.offerName} numberOfLines={1}>
+                  {offer.helper?.name ?? 'Member'}
+                </Text>
+                {Boolean(offer.message) && (
+                  <Text style={styles.offerMessage} numberOfLines={2}>
+                    {offer.message}
+                  </Text>
+                )}
+              </View>
+              {offer.status === 'accepted' ? (
+                <Text style={styles.acceptedText}>Accepted</Text>
+              ) : offer.status === 'declined' ? (
+                <Text style={styles.declinedText}>Declined</Text>
+              ) : (
+                <Button
+                  title="Accept"
+                  size="sm"
+                  fullWidth={false}
+                  onPress={() => onAcceptOffer?.(bounty.id, offer.id)}
+                />
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {isTradePartner && tradeInProgress && (
+        <View style={styles.tradeSection}>
+          <Text style={styles.tradeSectionTitle}>💞 Skill trade in progress</Text>
+          <Text style={styles.tradeRow}>You: {myTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}</Text>
+          <Text style={styles.tradeRow}>
+            Your swap partner: {partnerTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}
+          </Text>
+          {myTradeConfirmed ? (
+            <Text style={styles.tradeHint}>
+              {partnerTradeConfirmed
+                ? 'Trade confirmed by both sides — nice swap! 🎉'
+                : 'Waiting for your swap partner to confirm (auto-completes 72h after acceptance).'}
+            </Text>
+          ) : (
+            <Button
+              title="I did my side 🤝"
+              size="sm"
+              onPress={() => onConfirmTrade?.(trade.id)}
+            />
+          )}
+        </View>
+      )}
+
+      {isTradePartner && tradeDone && (
+        <View style={[styles.tradeSection, styles.tradeSectionDone]}>
+          <Text style={styles.tradeDoneText}>✅ Skill trade confirmed by both sides</Text>
+        </View>
+      )}
+
       {/* Action Buttons */}
       {!showOfferInput && (
         <View style={styles.actionRow}>
@@ -163,7 +236,7 @@ export default function BountyCard({
                 <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
                 <Text style={styles.deleteText}>Delete</Text>
               </Pressable>
-              {bounty.status === 'open' && (
+              {bounty.status === 'open' && !isSwap && (
                 <Pressable
                   onPress={() => onCloseBounty?.(bounty.id)}
                   style={styles.closeButton}
@@ -318,6 +391,70 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
     color: COLORS.success,
+  },
+  tradeSection: {
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADII.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 6,
+  },
+  tradeSectionDone: {
+    borderColor: COLORS.success,
+    backgroundColor: COLORS.surface,
+  },
+  tradeSectionTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  tradeRow: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.textMuted,
+  },
+  tradeHint: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+  },
+  tradeDoneText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  offerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.border,
+  },
+  offerMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  offerName: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  offerMessage: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textMuted,
+    lineHeight: 16,
+  },
+  acceptedText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  declinedText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    color: COLORS.textFaint,
   },
   ownerActions: {
     flexDirection: 'row',
