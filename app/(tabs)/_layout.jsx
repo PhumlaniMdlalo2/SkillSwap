@@ -9,6 +9,7 @@ const ICONS = {
   index: 'home',
   explore: 'search',
   swap: 'sparkles',
+  messages: 'chatbubbles',
   wallet: 'wallet',
   profile: 'person',
 };
@@ -38,6 +39,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
       <Tabs.Screen name="swap" options={{ title: 'Swap' }} />
+      <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
       <Tabs.Screen name="wallet" options={{ title: 'Wallet' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>

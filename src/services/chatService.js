@@ -24,6 +24,64 @@ export const chatService = {
     return (data || []).map(mapMessage);
   },
 
+  async fetchConversations(userId) {
+    if (!userId) return [];
+
+    const { data: matches, error: matchesError } = await supabase
+      .from('matches')
+      .select('*, user1:user_id_1(user_id, name, avatar), user2:user_id_2(user_id, name, avatar)')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .order('matched_at', { ascending: false });
+
+    if (matchesError) throw matchesError;
+    if (!matches || matches.length === 0) return [];
+
+    const matchIds = matches.map((m) => m.match_id);
+
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
+      .select('match_id, sender_id, content, created_at')
+      .in('match_id', matchIds)
+      .order('created_at', { ascending: false });
+
+    if (messagesError) throw messagesError;
+
+    // Query is newest-first, so the first row seen per match is the latest.
+    const lastByMatch = new Map();
+    for (const msg of messages || []) {
+      if (!lastByMatch.has(msg.match_id)) lastByMatch.set(msg.match_id, msg);
+    }
+
+    const conversations = matches.map((m) => {
+      const isUser1 = m.user_id_1 === userId;
+      const counterpart = isUser1 ? m.user2 : m.user1;
+      const last = lastByMatch.get(m.match_id) ?? null;
+      return {
+        id: m.match_id,
+        matchedAt: m.matched_at,
+        counterpart: counterpart
+          ? { id: counterpart.user_id, name: counterpart.name, avatar: counterpart.avatar }
+          : null,
+        lastMessage: last
+          ? {
+              content: last.content,
+              createdAt: last.created_at,
+              senderId: last.sender_id,
+              fromMe: last.sender_id === userId,
+            }
+          : null,
+      };
+    });
+
+    conversations.sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt ?? a.matchedAt;
+      const bTime = b.lastMessage?.createdAt ?? b.matchedAt;
+      return new Date(bTime) - new Date(aTime);
+    });
+
+    return conversations;
+  },
+
   async sendMessage(matchId, senderId, content) {
     const trimmed = content?.trim();
     if (!trimmed) {
