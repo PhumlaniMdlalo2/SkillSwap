@@ -19,6 +19,7 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "version": "1.0.0",
     "plugins": [
       "expo-router",
       [
@@ -43,6 +44,14 @@
           "backgroundColor": "#ffffff"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "123456789"
+      }
+    },
+    "experiments": {
+      "babelLoader": true
+    }
   }
 }

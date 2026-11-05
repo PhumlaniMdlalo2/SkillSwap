@@ -1,30 +1,25 @@
-import fs from 'fs';
-import path from 'path';
+const fs = require('fs');
+const path = require('path');
+// Determine __dirname safely in Jest/Node test environment
+let __dirname = process.cwd();
+if (require.main && require.main.path) {
+  __dirname = path.dirname(require.main.path);
+} else if (require.main && require.main.filename) {
+  __dirname = path.dirname(require.main.filename);
+}
 
-const root = path.join(__dirname, '..');
-const freshSchema = fs.readFileSync(
-  path.join(root, 'supabase/migrations/schema.sql'),
-  'utf8',
-);
-const auditMigration = fs.readFileSync(
-  path.join(root, 'supabase/migrations/018_audit_fixes.sql'),
-  'utf8',
-);
+const root = __dirname;
+const freshSchema = fs.readFileSync(path.join(root, 'supabase/migrations/schema.sql'), 'utf8');
+const auditMigration = fs.readFileSync(path.join(root, 'supabase/migrations/018_audit_fixes.sql'), 'utf8');
 
 function expectSecurityInvariants(sql) {
   expect(sql).toMatch(/public\.is_admin\(\)/);
-  expect(sql).toMatch(
-    /revoke select, insert, update, delete on public\.users from anon, authenticated/i,
-  );
+  expect(sql).toMatch(/revoke select, insert, update, delete on public\.users from anon, authenticated/i);
   expect(sql).toMatch(/grant select \([^)]*xp[^)]*\)\s+on public\.users to anon, authenticated/i);
   expect(sql).toMatch(/references public\.matches\(match_id\) on delete set null/i);
   expect(sql).toMatch(/alter publication supabase_realtime add table public\.messages/i);
-  expect(sql).toMatch(
-    /revoke all on function public\.award_xp_and_streak\(uuid, integer\) from public, anon, authenticated/i,
-  );
-  expect(sql).toMatch(
-    /revoke all on function public\.set_learning_interests\(uuid, text\[\]\) from public, anon/i,
-  );
+  expect(sql).toMatch(/revoke all on function public\.award_xp_and_streak\(uuid, integer\) from public, anon, authenticated/i);
+  expect(sql).toMatch(/revoke all on function public\.set_learning_interests\(uuid, text\[\]\) from public, anon/i);
 }
 
 describe('SQL migration invariants', () => {
