@@ -52,14 +52,31 @@ describe('BountyCard — skill-trade proof', () => {
     );
 
     expect(getByText('Sarah')).toBeTruthy();
-    expect(getByText('Offers — pick the swap')).toBeTruthy();
+    expect(getByText('Offers — pick a helper')).toBeTruthy();
 
     fireEvent.press(getByLabelText('Accept'));
 
     expect(onAcceptOffer).toHaveBeenCalledWith('b1', 'o1');
   });
 
-  it("hides Mark Completed for swap bounties so completion goes through the trade", async () => {
+  it('lets the creator accept a pending token-bounty offer', async () => {
+    const onAcceptOffer = jest.fn();
+    const { getByText, getByLabelText } = await render(
+      <BountyCard
+        bounty={makeSwapBounty({ rewardType: 'token' })}
+        currentUserId="u1"
+        onAcceptOffer={onAcceptOffer}
+        onConfirmTrade={jest.fn()}
+      />,
+    );
+
+    expect(getByText('Offers — pick a helper')).toBeTruthy();
+    fireEvent.press(getByLabelText('Accept'));
+
+    expect(onAcceptOffer).toHaveBeenCalledWith('b1', 'o1');
+  });
+
+  it('hides Mark Completed for swap bounties so completion goes through the trade', async () => {
     const { queryByText } = await render(
       <BountyCard
         bounty={makeSwapBounty()}
@@ -96,7 +113,7 @@ describe('BountyCard — skill-trade proof', () => {
       />,
     );
 
-    expect(getByText('💞 Skill trade in progress')).toBeTruthy();
+    expect(getByText('💞 Trade in progress')).toBeTruthy();
     fireEvent.press(getByLabelText('I did my side 🤝'));
 
     expect(onConfirmTrade).toHaveBeenCalledWith('t1');
@@ -125,6 +142,6 @@ describe('BountyCard — skill-trade proof', () => {
       />,
     );
 
-    expect(getByText('✅ Skill trade confirmed by both sides')).toBeTruthy();
+    expect(getByText('✅ Trade confirmed by both sides')).toBeTruthy();
   });
 });

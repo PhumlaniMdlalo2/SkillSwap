@@ -76,9 +76,16 @@ describe('bountyService', () => {
         error: null,
       });
 
-      const bounties = await bountyService.getBounties({ category: 'Technology', search: 'Python' });
+      const bounties = await bountyService.getBounties({
+        category: 'Technology',
+        search: 'Python',
+      });
 
       expect(supabase.from).toHaveBeenCalledWith('bounties');
+      expect(builderCalls).toContainEqual({
+        method: 'in',
+        args: ['status', ['open', 'in_progress']],
+      });
       expect(bounties).toHaveLength(1);
       expect(bounties[0].title).toBe('Help with Python Async');
       expect(bounties[0].offers).toHaveLength(1);

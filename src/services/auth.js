@@ -6,7 +6,9 @@ async function fetchProfile(authUser) {
   if (!authUser) return null;
   const { data, error } = await supabase
     .from('users')
-    .select('*')
+    .select(
+      'user_id, name, avatar, bio, rating, review_count, xp, streak_weeks, last_active_week, created_at',
+    )
     .eq('user_id', authUser.id)
     .maybeSingle();
   if (error) throw error;
@@ -20,7 +22,7 @@ async function fetchProfile(authUser) {
     return null;
   }
 
-  return data;
+  return { ...data, email: authUser.email ?? null };
 }
 
 export async function signUp({ name, email, password }) {

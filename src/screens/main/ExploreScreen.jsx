@@ -20,7 +20,6 @@ import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { bountyService } from '../../services/bountyService';
-import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
 import { notify } from '../../utils/alert';
 
@@ -77,7 +76,10 @@ export default function ExploreScreen() {
       });
       await queryClient.invalidateQueries({ queryKey: ['bounties'] });
       setIsCreateModalOpen(false);
-      notify('Bounty Posted! 🎯', 'Your learning request is now visible to mentors in the community.');
+      notify(
+        'Bounty Posted! 🎯',
+        'Your learning request is now visible to mentors in the community.',
+      );
     } catch (err) {
       notify('Could not post bounty', err.message || 'Please check the details and try again.');
     } finally {
@@ -105,22 +107,15 @@ export default function ExploreScreen() {
     }
   };
 
-  const handleCloseBounty = async (bountyId) => {
-    try {
-      await bountyService.updateBountyStatus(bountyId, 'completed');
-      await queryClient.invalidateQueries({ queryKey: ['bounties'] });
-      notify('Bounty Completed! 🎉', 'Marked this request as completed.');
-    } catch (err) {
-      notify('Error', err.message || 'Could not update bounty.');
-    }
-  };
-
   // Skill-trade proof: the creator accepts an offer to open a swap.
   const handleAcceptOffer = async (bountyId, offerId) => {
     try {
       await bountyService.acceptOffer({ bountyId, offerId });
       await queryClient.invalidateQueries({ queryKey: ['bounties'] });
-      notify('Offer accepted! 🤝', 'The skill swap has started — both sides now confirm the trade.');
+      notify(
+        'Offer accepted! 🤝',
+        'The skill swap has started — both sides now confirm the trade.',
+      );
     } catch (err) {
       notify('Error', err.message || 'Could not accept offer.');
     }
@@ -133,14 +128,13 @@ export default function ExploreScreen() {
       const trade = await bountyService.confirmTradeSide(tradeId);
       await queryClient.invalidateQueries({ queryKey: ['bounties'] });
       if (trade?.status === 'completed') {
-        try {
-          await gamificationService.awardXpAndStreak(trade.creatorId, 25);
-          await gamificationService.awardXpAndStreak(trade.helperId, 25);
-        } catch (_xpErr) {
-          // Non-blocking gamification award
-        }
         await queryClient.invalidateQueries({ queryKey: ['user-stats'] });
-        notify('Skill trade confirmed! 🎉', 'Both sides verified the swap. You each earned +25 XP.');
+        await queryClient.invalidateQueries({ queryKey: ['wallet'] });
+        await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        notify(
+          'Skill trade confirmed! 🎉',
+          'Both sides verified the swap. You each earned +25 XP.',
+        );
       } else {
         notify('Trade confirmed 🤝', 'Waiting for your swap partner to confirm theirs.');
       }
@@ -153,16 +147,16 @@ export default function ExploreScreen() {
   const currentError = isBountiesMode ? bountiesError : skillsError;
   const currentRefetch = isBountiesMode ? refetchBounties : refetchSkills;
   const isFetching = isBountiesMode ? isBountiesFetching : isSkillsFetching;
-  const isPending = isBountiesMode ? isBountiesPending && bounties.length === 0 : isSkillsPending && !skills;
+  const isPending = isBountiesMode
+    ? isBountiesPending && bounties.length === 0
+    : isSkillsPending && !skills;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         {/* Top Header Row with Mode Selector & Post Button */}
         <View style={styles.topRow}>
-          <Text style={styles.title}>
-            {isBountiesMode ? 'Bounty Board 🎯' : 'Explore Skills'}
-          </Text>
+          <Text style={styles.title}>{isBountiesMode ? 'Bounty Board 🎯' : 'Explore Skills'}</Text>
         </View>
 
         {/* Mode Switcher Tabs */}
@@ -267,7 +261,6 @@ export default function ExploreScreen() {
               currentUserId={user?.user_id}
               onMakeOffer={handleMakeOffer}
               onDeleteBounty={handleDeleteBounty}
-              onCloseBounty={handleCloseBounty}
               onAcceptOffer={handleAcceptOffer}
               onConfirmTrade={handleConfirmTrade}
             />

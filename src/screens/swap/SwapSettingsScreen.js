@@ -49,6 +49,7 @@ export default function SwapSettingsScreen() {
     try {
       await swapService.updateSwapPreferences(user.user_id, preferences);
       await queryClient.invalidateQueries({ queryKey: ['swap-preferences'] });
+      await queryClient.invalidateQueries({ queryKey: ['swap-candidates'] });
       router.back();
     } catch (err) {
       notify('Could not save your settings', toUserMessage(err));

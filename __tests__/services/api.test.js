@@ -11,6 +11,7 @@ import {
   setLearningInterests,
   uploadAvatar,
   checkInSession,
+  createCheckInCode,
   confirmSessionSide,
   finalizeStaleSessions,
 } from '../../src/services/api';
@@ -152,6 +153,9 @@ describe('api service', () => {
       await getAvailabilityForSkill('s1');
       expect(builderCalls).toContainEqual({ method: 'eq', args: ['skill_id', 's1'] });
       expect(builderCalls).toContainEqual({ method: 'eq', args: ['booked', false] });
+      const gt = builderCalls.find((c) => c.method === 'gt');
+      expect(gt.args[0]).toBe('start_time');
+      expect(typeof gt.args[1]).toBe('string');
       expect(builderCalls).toContainEqual({
         method: 'order',
         args: ['start_time', { ascending: true }],
@@ -193,34 +197,49 @@ describe('api service', () => {
   });
 
   describe('setLearningInterests', () => {
-    it('returns an empty array when no categories are given', async () => {
-      mockFromResult({ data: [], error: null });
-      await expect(setLearningInterests('u1', [])).resolves.toEqual([]);
-      expect(builderCalls.filter((c) => c.method === 'insert')).toHaveLength(0);
+    it('calls the atomic rpc with the user and categories', async () => {
+      supabase.rpc.mockResolvedValue({ data: [{ category: 'Music' }], error: null });
+
+      const result = await setLearningInterests('u1', ['Music', 'Cooking']);
+
+      expect(supabase.rpc).toHaveBeenCalledWith('set_learning_interests', {
+        p_user_id: 'u1',
+        p_categories: ['Music', 'Cooking'],
+      });
+      expect(result).toEqual([{ category: 'Music' }]);
     });
 
-    it('deletes then inserts the given categories', async () => {
-      mockFromResult({ data: [], error: null });
-      await setLearningInterests('u1', ['Music', 'Cooking']);
-      const insert = builderCalls.find((c) => c.method === 'insert');
-      expect(insert.args[0]).toEqual([
-        { user_id: 'u1', category: 'Music' },
-        { user_id: 'u1', category: 'Cooking' },
-      ]);
-      expect(builderCalls.filter((c) => c.method === 'delete')).toHaveLength(1);
+    it('still calls the rpc for an empty selection', async () => {
+      supabase.rpc.mockResolvedValue({ data: [], error: null });
+
+      await expect(setLearningInterests('u1', [])).resolves.toEqual([]);
+      expect(supabase.rpc).toHaveBeenCalledWith('set_learning_interests', {
+        p_user_id: 'u1',
+        p_categories: [],
+      });
+    });
+
+    it('throws when the rpc errors', async () => {
+      supabase.rpc.mockResolvedValue({ data: null, error: new Error('nope') });
+
+      await expect(setLearningInterests('u1', ['Music'])).rejects.toThrow('nope');
     });
   });
 
   describe('checkInSession', () => {
-    it('calls the check_in_session rpc with the scanned role and code expiry', async () => {
+    it('calls the check_in_session rpc with the scanned role and server code', async () => {
       supabase.rpc.mockResolvedValue({ data: { session_id: 's1' }, error: null });
 
-      const result = await checkInSession({ sessionId: 's1', ownerRole: 'learner', codeExp: 1770000000 });
+      const result = await checkInSession({
+        sessionId: 's1',
+        ownerRole: 'learner',
+        code: 'abc123',
+      });
 
       expect(supabase.rpc).toHaveBeenCalledWith('check_in_session', {
         p_session_id: 's1',
         p_owner_role: 'learner',
-        p_code_exp: 1770000000,
+        p_code: 'abc123',
       });
       expect(result).toEqual({ session_id: 's1' });
     });
@@ -229,8 +248,24 @@ describe('api service', () => {
       supabase.rpc.mockResolvedValue({ data: null, error: new Error('nope') });
 
       await expect(
-        checkInSession({ sessionId: 's1', ownerRole: 'teacher', codeExp: 1770000000 }),
+        checkInSession({ sessionId: 's1', ownerRole: 'teacher', code: 'abc123' }),
       ).rejects.toThrow('nope');
+    });
+  });
+
+  describe('createCheckInCode', () => {
+    it('calls the create_check_in_code rpc', async () => {
+      supabase.rpc.mockResolvedValue({
+        data: { code: 'abc123', owner_role: 'teacher', expires_at: '2026-11-05T10:00:00Z' },
+        error: null,
+      });
+
+      const result = await createCheckInCode('s1');
+
+      expect(supabase.rpc).toHaveBeenCalledWith('create_check_in_code', {
+        p_session_id: 's1',
+      });
+      expect(result.code).toBe('abc123');
     });
   });
 

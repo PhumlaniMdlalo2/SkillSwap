@@ -27,15 +27,7 @@ export default function SwapScreen() {
   const [isSwiping, setIsSwiping] = useState(false);
   const [swipeError, setSwipeError] = useState(null);
 
-  const {
-    candidates,
-    currentIndex,
-    preferences,
-    setCandidates,
-    setCurrentIndex,
-    addSwipe,
-    addMatch,
-  } = useSwapStore();
+  const { candidates, currentIndex, preferences, setCandidates, setCurrentIndex } = useSwapStore();
 
   const {
     data: loadedCandidates,
@@ -70,10 +62,8 @@ export default function SwapScreen() {
     setSwipeError(null);
     try {
       const { matched, matchId } = await swapService.swipe(currentCandidate.id, direction);
-      addSwipe({ targetUserId: currentCandidate.id, direction });
 
       if (matched) {
-        addMatch({ userId2: currentCandidate.id, matchedAt: new Date().toISOString() });
         resetAnimation();
         setCurrentIndex(currentIndex + 1);
         router.push({

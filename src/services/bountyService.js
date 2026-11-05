@@ -42,10 +42,11 @@ function mapBounty(row) {
   };
 }
 
-const BOUNTY_SELECT = '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(helper:helper_id(user_id, name, avatar)), trades!bounty_id(*)';
+const BOUNTY_SELECT =
+  '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(helper:helper_id(user_id, name, avatar)), trades!bounty_id(*)';
 
 export const bountyService = {
-  async getBounties({ category, search, status = 'open' } = {}) {
+  async getBounties({ category, search, status } = {}) {
     let query = supabase
       .from('bounties')
       .select(BOUNTY_SELECT)
@@ -53,6 +54,8 @@ export const bountyService = {
 
     if (status) {
       query = query.eq('status', status);
+    } else {
+      query = query.in('status', ['open', 'in_progress']);
     }
     if (category) {
       query = query.eq('category', category);
@@ -125,18 +128,6 @@ export const bountyService = {
     const { error } = await supabase.from('bounties').delete().eq('bounty_id', bountyId);
     if (error) throw error;
     return true;
-  },
-
-  async updateBountyStatus(bountyId, status) {
-    const { data, error } = await supabase
-      .from('bounties')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('bounty_id', bountyId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return mapBounty(data);
   },
 
   async makeOffer({ bountyId, helperId, message }) {

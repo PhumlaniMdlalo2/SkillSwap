@@ -65,11 +65,8 @@ export default function CheckInScreen() {
       return;
     }
 
-    if (
-      typeof payload.codeExp !== 'number' ||
-      Math.floor(Date.now() / 1000) - payload.codeExp > 15
-    ) {
-      notify('Expired code', 'That code has expired. Ask your partner to show a fresh one.');
+    if (typeof payload.code !== 'string' || !payload.code) {
+      notify('Invalid code', 'Ask your partner to show a fresh check-in code.');
       return;
     }
 
@@ -85,7 +82,7 @@ export default function CheckInScreen() {
     handledRef.current = true;
     setBusy(true);
     try {
-      await api.checkInSession({ sessionId: id, ownerRole: payload.ownerRole, codeExp: payload.codeExp });
+      await api.checkInSession({ sessionId: id, ownerRole: payload.ownerRole, code: payload.code });
       await queryClient.invalidateQueries({ queryKey: ['session', id] });
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
       notify('Checked in', 'Your attendance has been recorded.');

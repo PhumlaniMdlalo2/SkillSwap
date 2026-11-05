@@ -12,16 +12,17 @@ function mapMessage(row) {
 }
 
 export const chatService = {
-  async fetchMessages(matchId) {
+  async fetchMessages(matchId, limit = 100) {
     if (!matchId) return [];
     const { data, error } = await supabase
       .from('messages')
       .select('*, sender:sender_id(name, avatar)')
       .eq('match_id', matchId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
     if (error) throw error;
-    return (data || []).map(mapMessage);
+    return (data || []).reverse().map(mapMessage);
   },
 
   async fetchConversations(userId) {
@@ -31,7 +32,8 @@ export const chatService = {
       .from('matches')
       .select('*, user1:user_id_1(user_id, name, avatar), user2:user_id_2(user_id, name, avatar)')
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
-      .order('matched_at', { ascending: false });
+      .order('matched_at', { ascending: false })
+      .limit(100);
 
     if (matchesError) throw matchesError;
     if (!matches || matches.length === 0) return [];
@@ -42,7 +44,8 @@ export const chatService = {
       .from('messages')
       .select('match_id, sender_id, content, created_at')
       .in('match_id', matchIds)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500);
 
     if (messagesError) throw messagesError;
 
@@ -105,7 +108,9 @@ export const chatService = {
     if (!matchId) return null;
     const { data, error } = await supabase
       .from('matches')
-      .select('*, user1:user_id_1(user_id, name, avatar, bio), user2:user_id_2(user_id, name, avatar, bio)')
+      .select(
+        '*, user1:user_id_1(user_id, name, avatar, bio), user2:user_id_2(user_id, name, avatar, bio)',
+      )
       .eq('match_id', matchId)
       .maybeSingle();
 

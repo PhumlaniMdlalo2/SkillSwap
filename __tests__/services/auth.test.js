@@ -32,9 +32,7 @@ describe('requestPasswordReset', () => {
   it('throws when the code cannot be sent', async () => {
     supabase.auth.signInWithOtp.mockResolvedValue({ error: new Error('rate limit exceeded') });
 
-    await expect(requestPasswordReset('reader@example.com')).rejects.toThrow(
-      'rate limit exceeded',
-    );
+    await expect(requestPasswordReset('reader@example.com')).rejects.toThrow('rate limit exceeded');
   });
 });
 
@@ -55,7 +53,7 @@ describe('verifyResetCode', () => {
       type: 'recovery',
     });
     expect(maybeSingle).toHaveBeenCalled();
-    expect(profile).toEqual({ user_id: 'user-1', name: 'Sam' });
+    expect(profile).toEqual({ user_id: 'user-1', name: 'Sam', email: null });
   });
 
   it('throws when the code is rejected', async () => {

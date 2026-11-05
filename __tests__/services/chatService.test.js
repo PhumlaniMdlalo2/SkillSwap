@@ -19,8 +19,7 @@ function makeBuilder() {
     {
       get(_target, prop) {
         if (prop === 'then') {
-          return (resolve) =>
-            resolve(resultQueue.length ? resultQueue.shift() : resolveValue);
+          return (resolve) => resolve(resultQueue.length ? resultQueue.shift() : resolveValue);
         }
         return (...args) => {
           builderCalls.push({ method: prop, args });
@@ -79,6 +78,7 @@ describe('chatService', () => {
       const messages = await chatService.fetchMessages('match-123');
 
       expect(supabase.from).toHaveBeenCalledWith('messages');
+      expect(builderCalls).toContainEqual({ method: 'limit', args: [100] });
       expect(messages).toEqual([
         {
           id: 'm1',

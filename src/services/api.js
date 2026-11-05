@@ -14,7 +14,7 @@ export async function getSkills({ category, search } = {}) {
 export async function getSkillById(skillId) {
   const { data, error } = await supabase
     .from('skills')
-    .select('*, teacher:user_id(*)')
+    .select('*, teacher:user_id(user_id, name, avatar, bio, rating, review_count, created_at)')
     .eq('skill_id', skillId)
     .maybeSingle();
   if (error) throw error;
@@ -49,6 +49,7 @@ export async function getAvailabilityForSkill(skillId) {
     .select('*')
     .eq('skill_id', skillId)
     .eq('booked', false)
+    .gt('start_time', new Date().toISOString())
     .order('start_time', { ascending: true });
   if (error) throw error;
   return data;
@@ -215,16 +216,21 @@ export async function scheduleSession({ requestId, availabilityIds }) {
   return data;
 }
 
-// Step 4: each party scans the other's QR to confirm attendance. ownerRole is
-// the role encoded in the scanned code (the partner's), so the server records
-// the caller as present and rejects a scan of the caller's own code. codeExp
-// is the scanned payload's unix-seconds expiry, which the server validates so
-// screenshotted codes can't be reused.
-export async function checkInSession({ sessionId, ownerRole, codeExp }) {
+// Step 4: the owner displays a server-issued code in their QR; the partner
+// scans and submits it to prove they actually met.
+export async function createCheckInCode(sessionId) {
+  const { data, error } = await supabase.rpc('create_check_in_code', {
+    p_session_id: sessionId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function checkInSession({ sessionId, ownerRole, code }) {
   const { data, error } = await supabase.rpc('check_in_session', {
     p_session_id: sessionId,
     p_owner_role: ownerRole,
-    p_code_exp: codeExp,
+    p_code: code,
   });
   if (error) throw error;
   return data;
@@ -293,7 +299,7 @@ export async function addReview({ sessionId, reviewerId, revieweeId, rating, com
 export async function getUserById(userId) {
   const { data, error } = await supabase
     .from('users')
-    .select('*')
+    .select('user_id, name, avatar, bio, rating, review_count, created_at')
     .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -340,9 +346,7 @@ export async function uploadAvatar({ userId, uri, base64, mimeType = 'image/jpeg
   const ext = mimeType.split('/')[1] || 'jpg';
   const path = `${userId}/avatar.${ext}`;
 
-  const arrayBuffer = base64
-    ? base64ToArrayBuffer(base64)
-    : await (await fetch(uri)).arrayBuffer();
+  const arrayBuffer = base64 ? base64ToArrayBuffer(base64) : await (await fetch(uri)).arrayBuffer();
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')
@@ -356,7 +360,9 @@ export async function uploadAvatar({ userId, uri, base64, mimeType = 'image/jpeg
     .from('users')
     .update({ avatar: avatarUrl })
     .eq('user_id', userId)
-    .select()
+    .select(
+      'user_id, name, avatar, bio, rating, review_count, xp, streak_weeks, last_active_week, created_at',
+    )
     .single();
   if (error) throw error;
   return data;
@@ -374,20 +380,12 @@ export async function getLearningInterests(userId) {
 // Onboarding step 2: replaces the user's full interest set with the given
 // categories (simplest mental model for a multi-select "pick a few" step).
 export async function setLearningInterests(userId, categories) {
-  const { error: deleteError } = await supabase
-    .from('learning_interests')
-    .delete()
-    .eq('user_id', userId);
-  if (deleteError) throw deleteError;
-
-  if (categories.length === 0) return [];
-
-  const { data, error } = await supabase
-    .from('learning_interests')
-    .insert(categories.map((category) => ({ user_id: userId, category })))
-    .select();
+  const { data, error } = await supabase.rpc('set_learning_interests', {
+    p_user_id: userId,
+    p_categories: categories,
+  });
   if (error) throw error;
-  return data;
+  return data ?? [];
 }
 
 // Onboarding step 3: teaching-style / learning-style preferences that

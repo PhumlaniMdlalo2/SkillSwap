@@ -19,7 +19,6 @@ export default function BountyCard({
   currentUserId,
   onMakeOffer,
   onDeleteBounty,
-  onCloseBounty,
   onAcceptOffer,
   onConfirmTrade,
 }) {
@@ -30,13 +29,14 @@ export default function BountyCard({
   const isOwner = bounty.creatorId === currentUserId;
   const hasOffered = bounty.offers?.some((o) => o.helperId === currentUserId);
   const urgencyStyle = URGENCY_CONFIG[bounty.urgency] ?? URGENCY_CONFIG.flexible;
-  const isSwap = bounty.rewardType === 'swap';
   const trade = bounty.trade ?? null;
   const tradeInProgress = trade?.status === 'in_progress';
   const tradeDone = trade?.status === 'completed';
   const myTradeConfirmed = trade && (isOwner ? trade.creatorConfirmedAt : trade.helperConfirmedAt);
-  const partnerTradeConfirmed = trade && (isOwner ? trade.helperConfirmedAt : trade.creatorConfirmedAt);
-  const isTradePartner = trade && (trade.creatorId === currentUserId || trade.helperId === currentUserId);
+  const partnerTradeConfirmed =
+    trade && (isOwner ? trade.helperConfirmedAt : trade.creatorConfirmedAt);
+  const isTradePartner =
+    trade && (trade.creatorId === currentUserId || trade.helperId === currentUserId);
 
   const handleSubmitOffer = async () => {
     if (submittingOffer) return;
@@ -54,15 +54,11 @@ export default function BountyCard({
   };
 
   const handleDelete = () => {
-    confirmAction(
-      'Delete Bounty?',
-      'Are you sure you want to remove this learning request?',
-      {
-        confirmText: 'Delete',
-        destructive: true,
-        onConfirm: () => onDeleteBounty?.(bounty.id),
-      },
-    );
+    confirmAction('Delete Bounty?', 'Are you sure you want to remove this learning request?', {
+      confirmText: 'Delete',
+      destructive: true,
+      onConfirm: () => onDeleteBounty?.(bounty.id),
+    });
   };
 
   return (
@@ -158,11 +154,11 @@ export default function BountyCard({
         </View>
       )}
 
-      {/* Skill-trade proof: swap bounties need an accepted offer + two-sided
-          confirmation before they can complete. */}
-      {isOwner && isSwap && bounty.status === 'open' && bounty.offers?.length > 0 && (
+      {/* Offers are accepted for both token and swap rewards; completion
+          always requires both sides to confirm the trade. */}
+      {isOwner && bounty.status === 'open' && bounty.offers?.length > 0 && (
         <View style={styles.tradeSection}>
-          <Text style={styles.tradeSectionTitle}>Offers — pick the swap</Text>
+          <Text style={styles.tradeSectionTitle}>Offers — pick a helper</Text>
           {bounty.offers.map((offer) => (
             <View key={offer.id} style={styles.offerRow}>
               <Avatar uri={offer.helper?.avatar} name={offer.helper?.name} size={28} />
@@ -195,30 +191,28 @@ export default function BountyCard({
 
       {isTradePartner && tradeInProgress && (
         <View style={styles.tradeSection}>
-          <Text style={styles.tradeSectionTitle}>💞 Skill trade in progress</Text>
-          <Text style={styles.tradeRow}>You: {myTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}</Text>
+          <Text style={styles.tradeSectionTitle}>💞 Trade in progress</Text>
           <Text style={styles.tradeRow}>
-            Your swap partner: {partnerTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}
+            You: {myTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}
+          </Text>
+          <Text style={styles.tradeRow}>
+            Your trade partner: {partnerTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}
           </Text>
           {myTradeConfirmed ? (
             <Text style={styles.tradeHint}>
               {partnerTradeConfirmed
-                ? 'Trade confirmed by both sides — nice swap! 🎉'
-                : 'Waiting for your swap partner to confirm (auto-completes 72h after acceptance).'}
+                ? 'Trade confirmed by both sides — nice work! 🎉'
+                : 'Waiting for your trade partner to confirm (auto-completes 72h after acceptance).'}
             </Text>
           ) : (
-            <Button
-              title="I did my side 🤝"
-              size="sm"
-              onPress={() => onConfirmTrade?.(trade.id)}
-            />
+            <Button title="I did my side 🤝" size="sm" onPress={() => onConfirmTrade?.(trade.id)} />
           )}
         </View>
       )}
 
       {isTradePartner && tradeDone && (
         <View style={[styles.tradeSection, styles.tradeSectionDone]}>
-          <Text style={styles.tradeDoneText}>✅ Skill trade confirmed by both sides</Text>
+          <Text style={styles.tradeDoneText}>✅ Trade confirmed by both sides</Text>
         </View>
       )}
 
@@ -236,22 +230,13 @@ export default function BountyCard({
                 <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
                 <Text style={styles.deleteText}>Delete</Text>
               </Pressable>
-              {bounty.status === 'open' && !isSwap && (
-                <Pressable
-                  onPress={() => onCloseBounty?.(bounty.id)}
-                  style={styles.closeButton}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.closeText}>Mark Completed</Text>
-                </Pressable>
-              )}
             </View>
           ) : hasOffered ? (
             <View style={styles.offeredBadge}>
               <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
               <Text style={styles.offeredText}>You offered to help</Text>
             </View>
-          ) : (
+          ) : bounty.status === 'open' ? (
             <Button
               title="I Can Help 🤝"
               variant="primary"
@@ -259,6 +244,8 @@ export default function BountyCard({
               style={styles.helpButton}
               onPress={() => setShowOfferInput(true)}
             />
+          ) : (
+            <Text style={styles.tradeHint}>This bounty is already in progress.</Text>
           )}
         </View>
       )}
@@ -473,14 +460,6 @@ const styles = StyleSheet.create({
   deleteText: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.danger,
-    fontWeight: '600',
-  },
-  closeButton: {
-    paddingVertical: SPACING.xs,
-  },
-  closeText: {
-    fontSize: FONT_SIZES.xs,
-    color: COLORS.primary,
     fontWeight: '600',
   },
   offerInputSection: {

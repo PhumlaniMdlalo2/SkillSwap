@@ -17,7 +17,7 @@ export default function SwapDetailsScreen() {
   const { id } = useLocalSearchParams();
   const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
-  const { candidates, currentIndex, setCurrentIndex, addSwipe, addMatch } = useSwapStore();
+  const { candidates, currentIndex, setCurrentIndex } = useSwapStore();
   const candidate = candidates.find((c) => c.id === id);
 
   if (!candidate) {
@@ -33,10 +33,6 @@ export default function SwapDetailsScreen() {
     setSubmitting(true);
     try {
       const { matched } = await swapService.swipe(candidate.id, 'right');
-      addSwipe({ targetUserId: candidate.id, direction: 'right' });
-      if (matched) {
-        addMatch({ userId2: candidate.id, matchedAt: new Date().toISOString() });
-      }
       setCurrentIndex(currentIndex + 1);
 
       await queryClient.invalidateQueries({ queryKey: ['swap-candidates'] });

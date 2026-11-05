@@ -40,7 +40,7 @@ create table public.users (
 -- ---------------------------------------------------------
 create table public.token_wallet (
   wallet_id uuid primary key default gen_random_uuid(),
-  user_id uuid not null unique references public.users(user_id) on delete cascade,
+  user_id uuid not null unique references public.users(user_id) on delete restrict,
   balance integer not null default 0 check (balance >= 0),
   updated_at timestamptz not null default now()
 );
@@ -63,7 +63,7 @@ create table public.skills (
 create table public.availability (
   availability_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(user_id) on delete cascade,
-  skill_id uuid not null references public.skills(skill_id) on delete cascade,
+  skill_id uuid not null references public.skills(skill_id) on delete restrict,
   start_time timestamptz not null,
   end_time timestamptz not null,
   booked boolean not null default false,
@@ -95,16 +95,21 @@ create table public.availability_hours (
 -- ---------------------------------------------------------
 create table public.sessions (
   session_id uuid primary key default gen_random_uuid(),
-  availability_id uuid not null unique references public.availability(availability_id) on delete cascade,
+  availability_id uuid not null unique references public.availability(availability_id) on delete restrict,
   teacher_id uuid not null references public.users(user_id),
   learner_id uuid not null references public.users(user_id),
   session_date timestamptz not null,
   duration integer not null default 60 check (duration > 0),
   status public.session_status not null default 'pending',
+  completed_at timestamptz,
   teacher_checked_in_at timestamptz,
   learner_checked_in_at timestamptz,
   teacher_confirmed_at timestamptz,
   learner_confirmed_at timestamptz,
+  teacher_checkin_code text,
+  teacher_checkin_code_exp timestamptz,
+  learner_checkin_code text,
+  learner_checkin_code_exp timestamptz,
   created_at timestamptz not null default now(),
   constraint sessions_distinct_parties check (teacher_id <> learner_id)
 );
@@ -117,7 +122,7 @@ create table public.sessions (
 -- ---------------------------------------------------------
 create table public.session_availability (
   session_id uuid not null references public.sessions(session_id) on delete cascade,
-  availability_id uuid not null references public.availability(availability_id) on delete cascade,
+  availability_id uuid not null references public.availability(availability_id) on delete restrict,
   primary key (session_id, availability_id)
 );
 
@@ -130,7 +135,7 @@ create table public.session_availability (
 -- ---------------------------------------------------------
 create table public.session_requests (
   request_id uuid primary key default gen_random_uuid(),
-  skill_id uuid not null references public.skills(skill_id) on delete cascade,
+  skill_id uuid not null references public.skills(skill_id) on delete restrict,
   teacher_id uuid not null references public.users(user_id),
   learner_id uuid not null references public.users(user_id),
   message text,
@@ -146,7 +151,7 @@ create table public.session_requests (
 -- ---------------------------------------------------------
 create table public.reviews (
   review_id uuid primary key default gen_random_uuid(),
-  session_id uuid not null references public.sessions(session_id) on delete cascade,
+  session_id uuid not null references public.sessions(session_id) on delete restrict,
   reviewer_id uuid not null references public.users(user_id),
   reviewee_id uuid not null references public.users(user_id),
   rating integer not null check (rating between 1 and 5),
@@ -161,7 +166,7 @@ create table public.reviews (
 -- ---------------------------------------------------------
 create table public.token_transactions (
   transaction_id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(user_id) on delete cascade,
+  user_id uuid not null references public.users(user_id) on delete restrict,
   session_id uuid references public.sessions(session_id) on delete set null,
   type public.transaction_type not null,
   amount integer not null,
@@ -465,6 +470,14 @@ begin
   if exists (
     select 1 from public.availability
     where availability_id = any(p_availability_ids)
+      and start_time <= now()
+  ) then
+    raise exception 'One or more selected time slots has already passed';
+  end if;
+
+  if exists (
+    select 1 from public.availability
+    where availability_id = any(p_availability_ids)
       and (skill_id <> v_request.skill_id or user_id <> v_request.teacher_id)
   ) then
     raise exception 'These slots do not belong to the requested skill';
@@ -519,11 +532,55 @@ begin
 end;
 $$;
 
--- Session check-in: each party scans the other's QR (whose payload carries the
--- owner's role) to confirm they actually met. The payload also carries codeExp
--- (unix seconds), so screenshotted codes expire within ~a minute. Matches
--- supabase.rpc('check_in_session', { p_session_id, p_owner_role, p_code_exp }).
-create or replace function public.check_in_session(p_session_id uuid, p_owner_role text, p_code_exp bigint)
+-- Session check-in: each party displays a server-generated, short-lived code
+-- in their QR; the partner scans it to prove they actually met. Codes are
+-- bound to the session and the owner's role and are cleared after use.
+-- Matches supabase.rpc('create_check_in_code', { p_session_id }).
+create or replace function public.create_check_in_code(p_session_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_session public.sessions;
+  v_role text;
+  v_code text := replace(gen_random_uuid()::text, '-', '');
+  v_expires_at timestamptz := now() + interval '90 seconds';
+begin
+  select * into v_session from public.sessions where session_id = p_session_id for update;
+  if not found then
+    raise exception 'Session not found';
+  end if;
+  if v_session.status <> 'pending' then
+    raise exception 'Only pending sessions can be checked in';
+  end if;
+
+  if v_session.teacher_id = auth.uid() then
+    v_role := 'teacher';
+    update public.sessions
+      set teacher_checkin_code = v_code, teacher_checkin_code_exp = v_expires_at
+      where session_id = p_session_id;
+  elsif v_session.learner_id = auth.uid() then
+    v_role := 'learner';
+    update public.sessions
+      set learner_checkin_code = v_code, learner_checkin_code_exp = v_expires_at
+      where session_id = p_session_id;
+  else
+    raise exception 'Only participants can check in to this session';
+  end if;
+
+  return jsonb_build_object('code', v_code, 'expires_at', v_expires_at, 'owner_role', v_role);
+end;
+$$;
+
+-- Record the caller's attendance after scanning the partner's server-issued
+-- code. Matches supabase.rpc('check_in_session',
+-- { p_session_id, p_owner_role, p_code }).
+drop function if exists public.check_in_session(uuid, text, bigint);
+drop function if exists public.check_in_session(uuid, text);
+
+create or replace function public.check_in_session(p_session_id uuid, p_owner_role text, p_code text)
 returns public.sessions
 language plpgsql
 security definer
@@ -533,10 +590,6 @@ declare
   v_session public.sessions;
   v_caller_role text;
 begin
-  if p_code_exp is not null and (floor(extract(epoch from now())) - p_code_exp) > 15 then
-    raise exception 'This check-in code has expired. Ask your partner to show a fresh one.';
-  end if;
-
   select * into v_session from public.sessions where session_id = p_session_id for update;
   if not found then
     raise exception 'Session not found';
@@ -558,6 +611,28 @@ begin
   end if;
   if p_owner_role = v_caller_role then
     raise exception 'Scan your partner''s code, not your own';
+  end if;
+
+  if p_owner_role = 'teacher' then
+    if v_session.teacher_checkin_code is null
+      or v_session.teacher_checkin_code_exp is null
+      or v_session.teacher_checkin_code_exp < now()
+      or v_session.teacher_checkin_code <> p_code then
+      raise exception 'This check-in code is invalid or has expired. Ask your partner to show a fresh one.';
+    end if;
+    update public.sessions
+      set teacher_checkin_code = null, teacher_checkin_code_exp = null
+      where session_id = p_session_id;
+  else
+    if v_session.learner_checkin_code is null
+      or v_session.learner_checkin_code_exp is null
+      or v_session.learner_checkin_code_exp < now()
+      or v_session.learner_checkin_code <> p_code then
+      raise exception 'This check-in code is invalid or has expired. Ask your partner to show a fresh one.';
+    end if;
+    update public.sessions
+      set learner_checkin_code = null, learner_checkin_code_exp = null
+      where session_id = p_session_id;
   end if;
 
   if v_caller_role = 'teacher' then
@@ -619,6 +694,41 @@ begin
 end;
 $$;
 
+-- Award the perfect-week bonus once per ISO week, after completion has been
+-- recorded so the current session is included in the count.
+create or replace function public.award_perfect_week_if_earned(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_week text := to_char(now(), 'IYYY-"W"IW');
+  v_last_awarded text;
+  v_count integer;
+begin
+  select last_perfect_week into v_last_awarded
+  from public.users where user_id = p_user_id for update;
+  if not found or v_last_awarded = v_week then
+    return;
+  end if;
+
+  select count(*) into v_count
+  from public.sessions
+  where status = 'completed'
+    and completed_at >= date_trunc('week', now())
+    and completed_at < date_trunc('week', now()) + interval '7 days'
+    and (teacher_id = p_user_id or learner_id = p_user_id);
+
+  if v_count >= 3 then
+    perform public.award_xp_and_streak(p_user_id, 200);
+    update public.users set last_perfect_week = v_week where user_id = p_user_id;
+  end if;
+end;
+$$;
+
+revoke all on function public.award_perfect_week_if_earned(uuid) from public, anon, authenticated;
+
 -- Complete Session -> Earn Tokens. Matches supabase.rpc('complete_session', { p_session_id }).
 -- Requires both check-ins AND both trade confirmations, unless the 72h
 -- auto-finalize deadline (anchored to the last check-in) has passed, in which
@@ -674,7 +784,8 @@ begin
   join public.skills s on s.skill_id = a.skill_id
   where a.availability_id = v_session.availability_id;
 
-  update public.sessions set status = 'completed' where session_id = p_session_id
+  update public.sessions set status = 'completed', completed_at = now()
+  where session_id = p_session_id
   returning * into v_session;
 
   update public.token_wallet set balance = balance + v_reward, updated_at = now()
@@ -682,6 +793,11 @@ begin
 
   insert into public.token_transactions (user_id, session_id, type, amount, description)
   values (v_session.teacher_id, p_session_id, 'earn', v_reward, 'Taught ' || coalesce(v_skill_title, 'a session'));
+
+  perform public.award_xp_and_streak(v_session.teacher_id, 100);
+  perform public.award_xp_and_streak(v_session.learner_id, 100);
+  perform public.award_perfect_week_if_earned(v_session.teacher_id);
+  perform public.award_perfect_week_if_earned(v_session.learner_id);
 
   return v_session;
 end;
@@ -732,13 +848,19 @@ begin
     join public.skills s on s.skill_id = a.skill_id
     where a.availability_id = v_session.availability_id;
 
-    update public.sessions set status = 'completed' where session_id = v_session.session_id;
+    update public.sessions set status = 'completed', completed_at = now()
+    where session_id = v_session.session_id;
 
     update public.token_wallet set balance = balance + v_reward, updated_at = now()
     where user_id = v_session.teacher_id;
 
     insert into public.token_transactions (user_id, session_id, type, amount, description)
     values (v_session.teacher_id, v_session.session_id, 'earn', v_reward, 'Taught ' || coalesce(v_skill_title, 'a session'));
+
+    perform public.award_xp_and_streak(v_session.teacher_id, 100);
+    perform public.award_xp_and_streak(v_session.learner_id, 100);
+    perform public.award_perfect_week_if_earned(v_session.teacher_id);
+    perform public.award_perfect_week_if_earned(v_session.learner_id);
 
     v_count := v_count + 1;
   end loop;
@@ -888,6 +1010,11 @@ begin
   end if;
 
   delete from public.availability_hours where skill_id = p_skill_id;
+
+  -- Drop future slots that no longer match the new weekly template. Booked
+  -- slots are kept (they belong to an active session).
+  delete from public.availability
+  where skill_id = p_skill_id and booked = false and start_time > now();
 
   for v_item in select * from jsonb_array_elements(coalesce(p_hours, '[]'::jsonb))
   loop
@@ -1060,6 +1187,7 @@ as $$
       ) as compat_formats
     from public.users u
     cross join me
+    left join public.swap_preferences my_swap on my_swap.user_id = auth.uid()
     left join public.style_preferences sp on sp.user_id = u.user_id
     left join lateral (
       select skill_id, title, category from public.skills
@@ -1082,6 +1210,7 @@ as $$
       where learning_interests.user_id = u.user_id
     ) all_interests on true
     where u.user_id <> auth.uid()
+      and (my_swap.skill_category is null or s.category = my_swap.skill_category)
       and not exists (
         select 1 from public.swipes
         where swiper_id = auth.uid() and target_id = u.user_id
@@ -1172,7 +1301,10 @@ $$;
 grant execute on function public.request_session(uuid, text) to authenticated;
 grant execute on function public.respond_to_request(uuid, boolean) to authenticated;
 grant execute on function public.schedule_session(uuid, uuid[]) to authenticated;
-grant execute on function public.check_in_session(uuid, text, bigint) to authenticated;
+revoke all on function public.create_check_in_code(uuid) from public, anon;
+grant execute on function public.create_check_in_code(uuid) to authenticated;
+revoke all on function public.check_in_session(uuid, text, text) from public, anon;
+grant execute on function public.check_in_session(uuid, text, text) to authenticated;
 grant execute on function public.confirm_session_side(uuid) to authenticated;
 grant execute on function public.complete_session(uuid) to authenticated;
 grant execute on function public.finalize_stale_sessions() to authenticated;
@@ -1183,6 +1315,24 @@ grant execute on function public.record_swipe(uuid, public.swipe_direction) to a
 grant execute on function public.get_swap_candidates(integer) to authenticated;
 grant execute on function public.undo_last_swipe() to authenticated;
 grant execute on function public.unmatch(uuid) to authenticated;
+
+-- Admin checks must bypass the column-level SELECT grant on users so the
+-- policies below never need direct access to users.is_admin.
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.users u
+    where u.user_id = auth.uid() and u.is_admin
+  );
+$$;
+
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to authenticated;
 
 -- =========================================================
 -- Row Level Security
@@ -1204,7 +1354,13 @@ alter table public.blocked_users enable row level security;
 alter table public.swap_preferences enable row level security;
 alter table public.style_preferences enable row level security;
 
--- users: public directory, self-editable, admins can moderate
+-- users: public directory, but email/is_admin/xp are not client-readable.
+-- XP writes go through SECURITY DEFINER functions only.
+revoke select, insert, update, delete on public.users from anon, authenticated;
+grant select (user_id, name, avatar, bio, rating, review_count, xp, streak_weeks, last_active_week, created_at)
+  on public.users to anon, authenticated;
+grant update (name, bio, avatar) on public.users to authenticated;
+
 create policy "Users are viewable by everyone"
   on public.users for select using (true);
 
@@ -1215,7 +1371,7 @@ create policy "Users can update their own profile"
 
 create policy "Admins can update any user"
   on public.users for update
-  using (exists (select 1 from public.users u where u.user_id = auth.uid() and u.is_admin));
+  using (public.is_admin());
 
 -- token_wallet: private balance, writable only by SECURITY DEFINER functions
 create policy "Users can view their own wallet"
@@ -1223,7 +1379,7 @@ create policy "Users can view their own wallet"
 
 create policy "Admins can view all wallets"
   on public.token_wallet for select
-  using (exists (select 1 from public.users u where u.user_id = auth.uid() and u.is_admin));
+  using (public.is_admin());
 
 -- skills: public browse, owner-managed
 create policy "Skills are viewable by everyone"
@@ -1272,7 +1428,7 @@ create policy "Participants can view their sessions"
 
 create policy "Admins can view all sessions"
   on public.sessions for select
-  using (exists (select 1 from public.users u where u.user_id = auth.uid() and u.is_admin));
+  using (public.is_admin());
 
 -- session_availability: internal linking table, only touched by the
 -- SECURITY DEFINER booking functions above; participants can read it.
@@ -1313,7 +1469,7 @@ create policy "Users can view their own transactions"
 
 create policy "Admins can view all transactions"
   on public.token_transactions for select
-  using (exists (select 1 from public.users u where u.user_id = auth.uid() and u.is_admin));
+  using (public.is_admin());
 
 -- learning_interests: public read (supports future matching), owner-managed
 create policy "Learning interests are viewable by everyone"
@@ -1325,15 +1481,56 @@ create policy "Users can add their own learning interests"
 create policy "Users can delete their own learning interests"
   on public.learning_interests for delete using (auth.uid() = user_id);
 
+-- Replace a user's interests atomically so onboarding never leaves a
+-- half-saved selection. Matches supabase.rpc('set_learning_interests', ...).
+create or replace function public.set_learning_interests(p_user_id uuid, p_categories text[])
+returns setof public.learning_interests
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or auth.uid() <> p_user_id then
+    raise exception 'You can only update your own learning interests';
+  end if;
+
+  delete from public.learning_interests where user_id = p_user_id;
+
+  if p_categories is not null then
+    insert into public.learning_interests (user_id, category)
+    select p_user_id, category
+    from (select distinct trim(category) as category from unnest(p_categories) as category) c
+    where category <> ''
+    on conflict do nothing;
+  end if;
+
+  return query
+    select * from public.learning_interests
+    where user_id = p_user_id
+    order by created_at;
+end;
+$$;
+
+revoke all on function public.set_learning_interests(uuid, text[]) from public, anon;
+grant execute on function public.set_learning_interests(uuid, text[]) to authenticated;
+
 -- swipes: you can only ever see your own swipes (not who swiped on you —
 -- that's only revealed once record_swipe() turns it into a match)
 create policy "Users can view their own swipes"
   on public.swipes for select using (auth.uid() = swiper_id);
 
--- matches: both participants can see it; writes only via record_swipe()
+-- matches: both participants can see it; writes only via record_swipe().
+-- A block hides the match and stops the chat.
 create policy "Participants can view their matches"
   on public.matches for select
-  using (auth.uid() = user_id_1 or auth.uid() = user_id_2);
+  using (
+    (auth.uid() = user_id_1 or auth.uid() = user_id_2)
+    and not exists (
+      select 1 from public.blocked_users b
+      where (b.user_id = matches.user_id_1 and b.blocked_user_id = matches.user_id_2)
+         or (b.user_id = matches.user_id_2 and b.blocked_user_id = matches.user_id_1)
+    )
+  );
 
 -- blocked_users: fully self-managed
 create policy "Users can view their own blocks"
@@ -1395,8 +1592,8 @@ create policy "Users can delete their own avatar"
 -- ---------------------------------------------------------
 create table public.messages (
   message_id uuid primary key default gen_random_uuid(),
-  match_id uuid not null references public.matches(match_id) on delete cascade,
-  sender_id uuid not null references public.users(user_id) on delete cascade,
+  match_id uuid references public.matches(match_id) on delete set null,
+  sender_id uuid not null references public.users(user_id) on delete restrict,
   content text not null check (char_length(trim(content)) > 0 and char_length(content) <= 2000),
   created_at timestamptz not null default now()
 );
@@ -1414,6 +1611,11 @@ create policy "Match participants can read messages"
       select 1 from public.matches m
       where m.match_id = messages.match_id
         and (m.user_id_1 = auth.uid() or m.user_id_2 = auth.uid())
+        and not exists (
+          select 1 from public.blocked_users b
+          where (b.user_id = m.user_id_1 and b.blocked_user_id = m.user_id_2)
+             or (b.user_id = m.user_id_2 and b.blocked_user_id = m.user_id_1)
+        )
     )
   );
 
@@ -1425,15 +1627,29 @@ create policy "Match participants can insert messages"
       select 1 from public.matches m
       where m.match_id = messages.match_id
         and (m.user_id_1 = auth.uid() or m.user_id_2 = auth.uid())
+        and not exists (
+          select 1 from public.blocked_users b
+          where (b.user_id = m.user_id_1 and b.blocked_user_id = m.user_id_2)
+             or (b.user_id = m.user_id_2 and b.blocked_user_id = m.user_id_1)
+        )
     )
   );
+
+-- Enable Supabase Realtime for messages when the publication exists.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end;
+$$;
 
 -- ---------------------------------------------------------
 -- bounties — reverse bounty board for urgent learning requests
 -- ---------------------------------------------------------
 create table public.bounties (
   bounty_id uuid primary key default gen_random_uuid(),
-  creator_id uuid not null references public.users(user_id) on delete cascade,
+  creator_id uuid not null references public.users(user_id) on delete restrict,
   title text not null check (char_length(trim(title)) >= 5 and char_length(title) <= 120),
   description text not null check (char_length(trim(description)) >= 10),
   category text not null,
@@ -1448,7 +1664,7 @@ create table public.bounties (
 create table public.bounty_offers (
   offer_id uuid primary key default gen_random_uuid(),
   bounty_id uuid not null references public.bounties(bounty_id) on delete cascade,
-  helper_id uuid not null references public.users(user_id) on delete cascade,
+  helper_id uuid not null references public.users(user_id) on delete restrict,
   message text,
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
   created_at timestamptz not null default now(),
@@ -1518,7 +1734,7 @@ create policy "Creators can update offer status"
 -- ---------------------------------------------------------
 create table public.trades (
   trade_id uuid primary key default gen_random_uuid(),
-  bounty_id uuid not null unique references public.bounties(bounty_id) on delete cascade,
+  bounty_id uuid not null unique references public.bounties(bounty_id) on delete restrict,
   creator_id uuid not null references public.users(user_id),
   helper_id uuid not null references public.users(user_id),
   status text not null default 'in_progress' check (status in ('in_progress', 'completed', 'cancelled')),
@@ -1551,6 +1767,7 @@ declare
   v_bounty public.bounties;
   v_offer public.bounty_offers;
   v_trade public.trades;
+  v_balance integer;
 begin
   select * into v_bounty from public.bounties where bounty_id = p_bounty_id for update;
   if not found then
@@ -1561,6 +1778,13 @@ begin
   end if;
   if v_bounty.status <> 'open' then
     raise exception 'Only open bounties can accept offers';
+  end if;
+  if v_bounty.reward_type = 'token' then
+    select balance into v_balance from public.token_wallet
+    where user_id = v_bounty.creator_id for update;
+    if v_balance is null or v_balance < v_bounty.token_amount then
+      raise exception 'Not enough tokens to accept this offer';
+    end if;
   end if;
 
   select * into v_offer from public.bounty_offers where offer_id = p_offer_id for update;
@@ -1599,6 +1823,8 @@ set search_path = public
 as $$
 declare
   v_trade public.trades;
+  v_bounty public.bounties;
+  v_balance integer;
   v_role text;
 begin
   select * into v_trade from public.trades where trade_id = p_trade_id for update;
@@ -1633,11 +1859,42 @@ begin
       now() > v_trade.created_at + interval '72 hours'
       and (v_trade.creator_confirmed_at is not null or v_trade.helper_confirmed_at is not null)
     ) then
+    select * into v_bounty from public.bounties
+      where bounty_id = v_trade.bounty_id for update;
+    if not found then
+      raise exception 'Bounty not found';
+    end if;
+
+    if v_bounty.reward_type = 'token' then
+      select balance into v_balance from public.token_wallet
+        where user_id = v_bounty.creator_id for update;
+      if v_balance is null or v_balance < v_bounty.token_amount then
+        raise exception 'Not enough tokens to release the bounty reward';
+      end if;
+
+      update public.token_wallet
+        set balance = balance - v_bounty.token_amount, updated_at = now()
+        where user_id = v_bounty.creator_id;
+      update public.token_wallet
+        set balance = balance + v_bounty.token_amount, updated_at = now()
+        where user_id = v_bounty.helper_id;
+
+      insert into public.token_transactions (user_id, type, amount, description)
+      values (v_bounty.creator_id, 'spend', -v_bounty.token_amount,
+              'Bounty reward: ' || v_bounty.title);
+      insert into public.token_transactions (user_id, type, amount, description)
+      values (v_bounty.helper_id, 'earn', v_bounty.token_amount,
+              'Bounty reward: ' || v_bounty.title);
+    end if;
+
     update public.trades set status = 'completed', updated_at = now()
       where trade_id = p_trade_id
       returning * into v_trade;
     update public.bounties set status = 'completed', updated_at = now()
       where bounty_id = v_trade.bounty_id;
+
+    perform public.award_xp_and_streak(v_trade.creator_id, 25);
+    perform public.award_xp_and_streak(v_trade.helper_id, 25);
   else
     update public.trades set updated_at = now()
       where trade_id = p_trade_id
@@ -1651,8 +1908,8 @@ $$;
 grant execute on function public.accept_bounty_offer(uuid, uuid) to authenticated;
 grant execute on function public.confirm_trade_side(uuid) to authenticated;
 
--- Guard: a swap-reward bounty can only reach 'completed' via a confirmed
--- trade. Token bounties keep the one-tap flow.
+-- Guard: a bounty can only reach 'completed' via a confirmed trade, so token
+-- rewards are always released by confirm_trade_side().
 create or replace function public.bounties_guard_completion()
 returns trigger
 language plpgsql
@@ -1660,12 +1917,12 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.status = 'completed' and old.status <> 'completed' and old.reward_type = 'swap' then
+  if new.status = 'completed' and old.status <> 'completed' then
     if not exists (
       select 1 from public.trades t
       where t.bounty_id = old.bounty_id and t.status = 'completed'
     ) then
-      raise exception 'Skill-trade bounties must be confirmed by both sides before completion';
+      raise exception 'Bounties must be confirmed by both sides before completion';
     end if;
   end if;
   return new;
@@ -1683,12 +1940,13 @@ create trigger bounties_guard_completion_trg
 alter table public.users add column if not exists xp integer not null default 0 check (xp >= 0);
 alter table public.users add column if not exists streak_weeks integer not null default 0 check (streak_weeks >= 0);
 alter table public.users add column if not exists last_active_week text;
+alter table public.users add column if not exists last_perfect_week text;
 
 create table if not exists public.endorsements (
   endorsement_id uuid primary key default gen_random_uuid(),
-  session_id uuid not null references public.sessions(session_id) on delete cascade,
-  reviewer_id uuid not null references public.users(user_id) on delete cascade,
-  reviewee_id uuid not null references public.users(user_id) on delete cascade,
+  session_id uuid not null references public.sessions(session_id) on delete restrict,
+  reviewer_id uuid not null references public.users(user_id) on delete restrict,
+  reviewee_id uuid not null references public.users(user_id) on delete restrict,
   badge_key text not null,
   created_at timestamptz not null default now(),
   constraint endorsements_distinct_parties check (reviewer_id <> reviewee_id),
@@ -1706,7 +1964,21 @@ create policy "Anyone authenticated can view endorsements"
 
 create policy "Users can give endorsements"
   on public.endorsements for insert
-  with check (auth.uid() = reviewer_id);
+  with check (
+    auth.uid() = reviewer_id
+    and reviewee_id <> auth.uid()
+    and badge_key in (
+      'explains_simply', 'infinite_patience', 'super_punctual',
+      'practical_exercises', 'conversational_pro', 'hands_on'
+    )
+    and exists (
+      select 1 from public.sessions s
+      where s.session_id = endorsements.session_id
+        and s.status = 'completed'
+        and auth.uid() in (s.teacher_id, s.learner_id)
+        and reviewee_id in (s.teacher_id, s.learner_id)
+    )
+  );
 
 create or replace function public.award_xp_and_streak(
   p_user_id uuid,
@@ -1763,5 +2035,7 @@ begin
     end;
 end;
 $$;
+
+revoke all on function public.award_xp_and_streak(uuid, integer) from public, anon, authenticated;
 
 

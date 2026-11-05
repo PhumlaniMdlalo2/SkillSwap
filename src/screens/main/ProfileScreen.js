@@ -34,10 +34,7 @@ export default function ProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const {
-    data: userStats,
-    refetch: refetchStats,
-  } = useQuery({
+  const { data: userStats, refetch: refetchStats } = useQuery({
     queryKey: ['user-stats', user?.user_id],
     queryFn: () => gamificationService.getUserStats(user.user_id),
     enabled: Boolean(user),
@@ -134,7 +131,7 @@ export default function ProfileScreen() {
         base64: asset.base64,
         mimeType: asset.mimeType ?? 'image/jpeg',
       });
-      updateUser(updated);
+      updateUser({ ...user, ...updated });
       await queryClient.invalidateQueries({ queryKey: ['reviews'] });
       await queryClient.invalidateQueries({ queryKey: ['skills'] });
     } catch (err) {

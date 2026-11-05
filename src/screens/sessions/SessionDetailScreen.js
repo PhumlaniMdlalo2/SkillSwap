@@ -11,7 +11,6 @@ import QRCodeDisplay from '../../components/sessions/QRCodeDisplay';
 import AddToCalendarModal from '../../components/sessions/AddToCalendarModal';
 import { useAuth, useWallet } from '../../store/useAppHooks';
 import * as api from '../../services/api';
-import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, SESSION_STATUS_LABELS } from '../../utils/constants';
 import { formatDate, formatTime, formatDuration } from '../../utils/helpers';
 import { notify } from '../../utils/alert';
@@ -105,7 +104,10 @@ export default function SessionDetailScreen() {
       await api.confirmSessionSide(session.session_id);
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
       await queryClient.invalidateQueries({ queryKey: ['session', id] });
-      notify('Trade confirmed 🤝', 'Your partner still needs to confirm for the session to complete.');
+      notify(
+        'Trade confirmed 🤝',
+        'Your partner still needs to confirm for the session to complete.',
+      );
     } catch (err) {
       notify('Could not confirm trade', toUserMessage(err));
     } finally {
@@ -117,11 +119,6 @@ export default function SessionDetailScreen() {
     setBusy(true);
     try {
       await api.completeSession(session.session_id);
-      try {
-        await gamificationService.awardXpAndStreak(user.user_id, 100);
-      } catch (_xpErr) {
-        // Non-blocking gamification award
-      }
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
       await queryClient.invalidateQueries({ queryKey: ['session', id] });
       await queryClient.invalidateQueries({ queryKey: ['user-stats'] });
@@ -226,8 +223,8 @@ export default function SessionDetailScreen() {
               </Text>
             ) : (
               <Text style={styles.checkinHint}>
-                Waiting for your {partnerLabel} to confirm. If they never do, this
-                auto-completes 72h after check-in.
+                Waiting for your {partnerLabel} to confirm. If they never do, this auto-completes
+                72h after check-in.
               </Text>
             )}
           </View>

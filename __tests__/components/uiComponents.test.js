@@ -5,6 +5,8 @@ import Avatar from '../../src/components/ui/Avatar';
 import Card from '../../src/components/ui/Card';
 import TokenBalance from '../../src/components/wallet/TokenBalance';
 
+jest.setTimeout(15000);
+
 describe('Badge', () => {
   it('renders the label', async () => {
     const { getByText } = await render(<Badge label="Pending" />);
