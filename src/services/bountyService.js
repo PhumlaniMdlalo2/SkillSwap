@@ -43,7 +43,7 @@ function mapBounty(row) {
 }
 
 const BOUNTY_SELECT =
-  '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(helper:helper_id(user_id, name, avatar)), trades!bounty_id(*)';
+  '*, creator:creator_id(user_id, name, avatar, rating), bounty_offers(*, helper:helper_id(user_id, name, avatar)), trades!bounty_id(*)';
 
 export const bountyService = {
   async getBounties({ category, search, status } = {}) {

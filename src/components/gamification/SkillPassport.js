@@ -8,7 +8,6 @@ export default function SkillPassport({ endorsements = [] }) {
     <Card style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.titleIcon}>🏅</Text>
           <Text style={styles.title}>Skill Passport</Text>
         </View>
         <Text style={styles.stampCount}>
@@ -26,7 +25,6 @@ export default function SkillPassport({ endorsements = [] }) {
         <View style={styles.grid}>
           {endorsements.map((badge) => (
             <View key={badge.key} style={styles.badgePill}>
-              <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
               <Text style={styles.badgeLabel}>{badge.label}</Text>
               <View style={styles.countTag}>
                 <Text style={styles.countText}>×{badge.count}</Text>
@@ -54,9 +52,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-  },
-  titleIcon: {
-    fontSize: 20,
   },
   title: {
     fontSize: FONT_SIZES.md,
@@ -92,9 +87,6 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 5,
     gap: 4,
-  },
-  badgeEmoji: {
-    fontSize: 14,
   },
   badgeLabel: {
     fontSize: 11,

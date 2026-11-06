@@ -14,8 +14,6 @@ import { useAuth } from '../../store/useAppHooks';
 import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 
-const LEVEL_EMOJIS = ['🌱', '🗺️', '🛠️', '🎓', '🏆'];
-
 export default function SkillPassportScreen() {
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
@@ -82,7 +80,6 @@ export default function SkillPassportScreen() {
   const xp = stats?.xp ?? 0;
   const levelInfo = stats?.levelInfo ?? { level: 1, title: 'Novice', progress: 0, minXp: 0, nextXp: 200 };
   const totalStamps = endorsements.reduce((acc, curr) => acc + (curr.count || 0), 0);
-  const levelEmoji = LEVEL_EMOJIS[Math.min((levelInfo.level ?? 1) - 1, LEVEL_EMOJIS.length - 1)];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -104,21 +101,21 @@ export default function SkillPassportScreen() {
           <View style={styles.heroAvatarWrap}>
             <Avatar uri={user?.avatar} name={user?.name} size={72} />
             <View style={styles.levelBadgeOverlay}>
-              <Text style={styles.levelBadgeOverlayText}>{levelEmoji}</Text>
+              <Text style={styles.levelBadgeOverlayText}>{levelInfo.level}</Text>
             </View>
           </View>
           <Text style={styles.heroName}>{user?.name}</Text>
           <Text style={styles.heroTitle}>
-            {levelEmoji} {levelInfo.title} · Level {levelInfo.level}
+            {levelInfo.title} · Level {levelInfo.level}
           </Text>
         </View>
 
         {/* ── Quick Stats ───────────────────────────── */}
         <View style={styles.quickStats}>
-          <QuickStat emoji="⚡" value={xp.toLocaleString()} label="Total XP" />
-          <QuickStat emoji="🔥" value={stats?.streakWeeks ?? 0} label="Week Streak" />
-          <QuickStat emoji="🏅" value={totalStamps} label="Stamps" />
-          <QuickStat emoji="🎯" value={sessionsThisWeek} label="This Week" />
+          <QuickStat value={xp.toLocaleString()} label="Total XP" />
+          <QuickStat value={stats?.streakWeeks ?? 0} label="Week Streak" />
+          <QuickStat value={totalStamps} label="Stamps" />
+          <QuickStat value={sessionsThisWeek} label="This Week" />
         </View>
 
         {/* ── XP & Level Progress ───────────────────── */}
@@ -134,7 +131,7 @@ export default function SkillPassportScreen() {
               return (
                 <View key={title} style={styles.roadmapItem}>
                   <View style={[styles.roadmapDot, reached && styles.roadmapDotReached]}>
-                    <Text style={styles.roadmapEmoji}>{LEVEL_EMOJIS[i]}</Text>
+                    <Text style={styles.roadmapEmoji}>{lvl}</Text>
                   </View>
                   <Text style={[
                     styles.roadmapLabel,
@@ -180,10 +177,9 @@ export default function SkillPassportScreen() {
   );
 }
 
-function QuickStat({ emoji, value, label }) {
+function QuickStat({ value, label }) {
   return (
     <View style={styles.quickStatItem}>
-      <Text style={styles.quickStatEmoji}>{emoji}</Text>
       <Text style={styles.quickStatValue}>{value}</Text>
       <Text style={styles.quickStatLabel}>{label}</Text>
     </View>
@@ -252,9 +248,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.sm + 2,
     gap: 2,
-  },
-  quickStatEmoji: {
-    fontSize: 16,
   },
   quickStatValue: {
     fontSize: FONT_SIZES.lg,

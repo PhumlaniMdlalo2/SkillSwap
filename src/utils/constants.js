@@ -5,6 +5,8 @@ export const COLORS = {
   secondary: '#00B894',
   secondaryLight: '#E3FBF5',
   token: '#F5A623',
+  // Text-safe token orange: #F5A623 only clears contrast as a fill/icon.
+  tokenText: '#B7791F',
   tokenLight: '#FEF3DE',
   danger: '#D64034',
   dangerLight: '#FDECEA',
@@ -89,12 +91,12 @@ export const TRANSACTION_TYPE = {
 export const DEFAULT_SESSION_TOKEN_COST = 1;
 
 export const ENDORSEMENT_BADGES = [
-  { key: 'explains_simply', label: 'Explains Simply', emoji: '🎯' },
-  { key: 'infinite_patience', label: 'Infinite Patience', emoji: '🧘' },
-  { key: 'super_punctual', label: 'Super Punctual', emoji: '⚡' },
-  { key: 'practical_exercises', label: 'Great Exercises', emoji: '💡' },
-  { key: 'conversational_pro', label: 'Conversational Pro', emoji: '🗣️' },
-  { key: 'hands_on', label: 'Hands-On & Practical', emoji: '🛠️' },
+  { key: 'explains_simply', label: 'Explains Simply', icon: 'bulb-outline' },
+  { key: 'infinite_patience', label: 'Infinite Patience', icon: 'hourglass-outline' },
+  { key: 'super_punctual', label: 'Super Punctual', icon: 'time-outline' },
+  { key: 'practical_exercises', label: 'Great Exercises', icon: 'clipboard-outline' },
+  { key: 'conversational_pro', label: 'Conversational Pro', icon: 'chatbubbles-outline' },
+  { key: 'hands_on', label: 'Hands-On & Practical', icon: 'hand-left-outline' },
 ];
 
 export const XP_REWARDS = {
@@ -106,16 +108,40 @@ export const XP_REWARDS = {
 export function getLevelInfo(xp = 0) {
   const currentXp = Math.max(0, Number(xp) || 0);
   if (currentXp < 200) {
-    return { level: 1, title: 'Novice', minXp: 0, nextXp: 200, progress: Math.min(1, currentXp / 200) };
+    return {
+      level: 1,
+      title: 'Novice',
+      minXp: 0,
+      nextXp: 200,
+      progress: Math.min(1, currentXp / 200),
+    };
   }
   if (currentXp < 500) {
-    return { level: 2, title: 'Explorer', minXp: 200, nextXp: 500, progress: Math.min(1, (currentXp - 200) / 300) };
+    return {
+      level: 2,
+      title: 'Explorer',
+      minXp: 200,
+      nextXp: 500,
+      progress: Math.min(1, (currentXp - 200) / 300),
+    };
   }
   if (currentXp < 1000) {
-    return { level: 3, title: 'Practitioner', minXp: 500, nextXp: 1000, progress: Math.min(1, (currentXp - 500) / 500) };
+    return {
+      level: 3,
+      title: 'Practitioner',
+      minXp: 500,
+      nextXp: 1000,
+      progress: Math.min(1, (currentXp - 500) / 500),
+    };
   }
   if (currentXp < 2000) {
-    return { level: 4, title: 'Skill Mentor', minXp: 1000, nextXp: 2000, progress: Math.min(1, (currentXp - 1000) / 1000) };
+    return {
+      level: 4,
+      title: 'Skill Mentor',
+      minXp: 1000,
+      nextXp: 2000,
+      progress: Math.min(1, (currentXp - 1000) / 1000),
+    };
   }
   return { level: 5, title: 'Master Polymath', minXp: 2000, nextXp: 2000, progress: 1 };
 }

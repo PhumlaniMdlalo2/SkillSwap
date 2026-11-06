@@ -26,6 +26,8 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textFaint,
+        tabBarHideOnKeyboard: true,
+        tabBarLabelStyle: { fontSize: 10 },
         tabBarStyle: { backgroundColor: COLORS.surface, borderTopColor: COLORS.border },
         tabBarIcon: ({ color, size, focused }) => (
           <Ionicons
@@ -39,7 +41,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
       <Tabs.Screen name="swap" options={{ title: 'Swap' }} />
-      <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
+      <Tabs.Screen name="messages" options={{ title: 'Chat' }} />
       <Tabs.Screen name="wallet" options={{ title: 'Wallet' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>

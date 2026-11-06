@@ -75,17 +75,17 @@ export function streakStatus(lastActiveWeek, now = new Date()) {
   return 'lapsed';
 }
 
-/** Emoji + label to show alongside the streak status. */
+/** Label and color to show alongside the streak status. */
 export function streakStatusMeta(status) {
   switch (status) {
     case 'active':
-      return { emoji: '🔥', label: 'Streak alive!', color: '#00B894' };
+      return { label: 'Streak alive!', color: '#00B894' };
     case 'at_risk':
-      return { emoji: '⏳', label: 'Act before the week ends!', color: '#F5A623' };
+      return { label: 'Act before the week ends!', color: '#F5A623' };
     case 'lapsed':
-      return { emoji: '💔', label: 'Streak broken — start fresh!', color: '#D64034' };
+      return { label: 'Streak broken — start fresh!', color: '#D64034' };
     default:
-      return { emoji: '🌱', label: 'Complete a session to start!', color: '#6C5CE7' };
+      return { label: 'Complete a session to start!', color: '#6C5CE7' };
   }
 }
 

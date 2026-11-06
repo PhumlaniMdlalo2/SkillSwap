@@ -19,7 +19,7 @@ import { useAuth, useWallet } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 import { formatTime, groupSlotsByDay } from '../../utils/helpers';
-import { notify } from '../../utils/alert';
+import { notify, toast } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
 export default function BookAppointmentScreen() {
@@ -116,9 +116,8 @@ export default function BookAppointmentScreen() {
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
       await queryClient.invalidateQueries({ queryKey: ['requests'] });
       await refreshWallet();
-      notify('Session confirmed!', `Your session for "${request.skill?.title}" is booked.`, () =>
-        router.replace('/(tabs)'),
-      );
+      toast('Session confirmed!', `Your session for "${request.skill?.title}" is booked.`);
+      router.replace('/(tabs)');
     } catch (err) {
       notify('Could not confirm this time', toUserMessage(err));
     } finally {

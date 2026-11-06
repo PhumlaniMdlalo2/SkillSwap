@@ -17,11 +17,12 @@ import BountyCard from '../../components/bounties/BountyCard';
 import CreateBountyModal from '../../components/bounties/CreateBountyModal';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import ErrorState from '../../components/ui/ErrorState';
+import EmptyState from '../../components/ui/EmptyState';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { bountyService } from '../../services/bountyService';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
-import { notify } from '../../utils/alert';
+import { notify, toast } from '../../utils/alert';
 
 export default function ExploreScreen() {
   const { user } = useAuth();
@@ -76,10 +77,7 @@ export default function ExploreScreen() {
       });
       await queryClient.invalidateQueries({ queryKey: ['bounties'] });
       setIsCreateModalOpen(false);
-      notify(
-        'Bounty Posted! 🎯',
-        'Your learning request is now visible to mentors in the community.',
-      );
+      toast('Bounty Posted!', 'Your learning request is now visible to mentors in the community.');
     } catch (err) {
       notify('Could not post bounty', err.message || 'Please check the details and try again.');
     } finally {
@@ -101,7 +99,7 @@ export default function ExploreScreen() {
     try {
       await bountyService.deleteBounty(bountyId);
       await queryClient.invalidateQueries({ queryKey: ['bounties'] });
-      notify('Bounty Deleted', 'Your request has been removed.');
+      toast('Bounty Deleted', 'Your request has been removed.');
     } catch (err) {
       notify('Error', err.message || 'Could not delete bounty.');
     }
@@ -112,10 +110,7 @@ export default function ExploreScreen() {
     try {
       await bountyService.acceptOffer({ bountyId, offerId });
       await queryClient.invalidateQueries({ queryKey: ['bounties'] });
-      notify(
-        'Offer accepted! 🤝',
-        'The skill swap has started — both sides now confirm the trade.',
-      );
+      toast('Offer accepted!', 'The skill swap has started — both sides now confirm the trade.');
     } catch (err) {
       notify('Error', err.message || 'Could not accept offer.');
     }
@@ -131,12 +126,9 @@ export default function ExploreScreen() {
         await queryClient.invalidateQueries({ queryKey: ['user-stats'] });
         await queryClient.invalidateQueries({ queryKey: ['wallet'] });
         await queryClient.invalidateQueries({ queryKey: ['transactions'] });
-        notify(
-          'Skill trade confirmed! 🎉',
-          'Both sides verified the swap. You each earned +25 XP.',
-        );
+        toast('Skill trade confirmed!', 'Both sides verified the swap. You each earned +25 XP.');
       } else {
-        notify('Trade confirmed 🤝', 'Waiting for your swap partner to confirm theirs.');
+        toast('Trade confirmed', 'Waiting for your swap partner to confirm theirs.');
       }
     } catch (err) {
       notify('Error', err.message || 'Could not confirm trade.');
@@ -156,7 +148,7 @@ export default function ExploreScreen() {
       <View style={styles.header}>
         {/* Top Header Row with Mode Selector & Post Button */}
         <View style={styles.topRow}>
-          <Text style={styles.title}>{isBountiesMode ? 'Bounty Board 🎯' : 'Explore Skills'}</Text>
+          <Text style={styles.title}>{isBountiesMode ? 'Bounty Board' : 'Explore Skills'}</Text>
         </View>
 
         {/* Mode Switcher Tabs */}
@@ -189,7 +181,7 @@ export default function ExploreScreen() {
               color={isBountiesMode ? COLORS.primary : COLORS.textMuted}
             />
             <Text style={[styles.segmentText, isBountiesMode && styles.segmentTextActive]}>
-              Bounty Board 🎯
+              Bounty Board
             </Text>
           </Pressable>
         </View>
@@ -244,16 +236,13 @@ export default function ExploreScreen() {
             />
           }
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="trophy-outline" size={32} color={COLORS.token} />
-              </View>
-              <Text style={styles.emptyTitle}>No open bounties yet</Text>
-              <Text style={styles.emptySubtitle}>
-                Need help with something? Tap Post Request below to create a bounty with a token or
-                skill reward!
-              </Text>
-            </View>
+            <EmptyState
+              icon="trophy-outline"
+              iconColor={COLORS.token}
+              iconBgColor={COLORS.tokenLight}
+              title="No open bounties yet"
+              subtitle="Need help with something? Tap Post Request below to create a bounty with a token or skill reward!"
+            />
           }
           renderItem={({ item }) => (
             <BountyCard
@@ -279,7 +268,11 @@ export default function ExploreScreen() {
             />
           }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No skills match your search yet. Try another term.</Text>
+            <EmptyState
+              icon="search-outline"
+              title="No matching skills yet"
+              subtitle="Try another search term or category."
+            />
           }
           renderItem={({ item }) => (
             <SkillCard skill={item} onPress={() => router.push(`/skills/${item.skill_id}`)} />
@@ -427,39 +420,5 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.xxl,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
-  },
-  emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: RADII.round,
-    backgroundColor: COLORS.tokenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.md,
-  },
-  emptyTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  emptySubtitle: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: SPACING.lg,
-  },
-  emptyText: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: SPACING.xl,
   },
 });

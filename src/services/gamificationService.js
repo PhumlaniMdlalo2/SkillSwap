@@ -120,7 +120,6 @@ export const gamificationService = {
           type: 'badge',
           title: `Earned "${badge?.label ?? e.badge_key}" badge`,
           description: 'Endorsement from a session partner',
-          emoji: badge?.emoji ?? '🏅',
           createdAt: e.created_at,
         });
       }

@@ -29,7 +29,7 @@ import {
   DEFAULT_SESSION_TOKEN_COST,
 } from '../../utils/constants';
 import { formatTime, groupSlotsByDay } from '../../utils/helpers';
-import { notify } from '../../utils/alert';
+import { notify, toast } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
 const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
@@ -140,11 +140,11 @@ export default function SkillDetailScreen() {
         skillId: skill.skill_id,
         message: message.trim() || undefined,
       });
-      notify(
+      toast(
         'Request sent!',
         `${skill.teacher?.name ?? 'The teacher'} will review your request. You'll be able to pick a time once they accept.`,
-        () => router.push('/requests'),
       );
+      router.push('/requests');
     } catch (err) {
       notify('Could not send request', toUserMessage(err));
     } finally {
@@ -187,7 +187,7 @@ export default function SkillDetailScreen() {
       await api.setAvailabilityHours({ skillId: skill.skill_id, hours });
       await queryClient.invalidateQueries({ queryKey: ['availability'] });
       await queryClient.invalidateQueries({ queryKey: ['availability-hours'] });
-      notify('Hours saved', 'Your weekly availability has been updated.');
+      toast('Hours saved', 'Your weekly availability has been updated.');
     } catch (err) {
       notify('Could not save your hours', toUserMessage(err));
     } finally {
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   slotChipTextBooked: {
-    color: COLORS.token,
+    color: COLORS.tokenText,
   },
   requestCard: {
     marginBottom: SPACING.md,

@@ -57,6 +57,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   button: {
+    alignSelf: 'center',
     paddingHorizontal: SPACING.xl,
   },
 });

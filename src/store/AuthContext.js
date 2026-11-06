@@ -113,7 +113,6 @@ export function AuthProvider({ children }) {
     await authService.signOut();
     setUser(null);
   }, []);
-
   // For screens that mutate the profile row themselves (e.g. avatar upload)
   // and already have the fresh row back from Supabase — pushes it into
   // context without a redundant re-fetch.

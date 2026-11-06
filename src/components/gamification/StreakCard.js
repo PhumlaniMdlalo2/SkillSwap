@@ -33,7 +33,6 @@ export default function StreakCard({ stats, sessionsThisWeek = 0 }) {
       {/* Top row: streak info */}
       <View style={styles.topRow}>
         <View style={styles.streakWrap}>
-          <Text style={styles.streakIcon}>{meta.emoji}</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.streakTitle}>
               {streakWeeks > 0 ? `${streakWeeks} Week Streak!` : 'Start Your Streak!'}
@@ -47,7 +46,7 @@ export default function StreakCard({ stats, sessionsThisWeek = 0 }) {
         {streakWeeks > 0 && (
           <View style={[styles.flameBadge, { backgroundColor: meta.color + '18' }]}>
             <Text style={[styles.flameBadgeText, { color: meta.color }]}>
-              🔥 {streakWeeks}
+              {streakWeeks}
             </Text>
           </View>
         )}
@@ -56,7 +55,6 @@ export default function StreakCard({ stats, sessionsThisWeek = 0 }) {
       {/* Countdown timer when at risk */}
       {status === 'at_risk' && (
         <View style={styles.countdownRow}>
-          <Text style={styles.countdownIcon}>⏰</Text>
           <Text style={styles.countdownText}>{countdownLabel()}</Text>
         </View>
       )}
@@ -64,7 +62,6 @@ export default function StreakCard({ stats, sessionsThisWeek = 0 }) {
       {/* Lapsed encouragement */}
       {status === 'lapsed' && (
         <View style={styles.countdownRow}>
-          <Text style={styles.countdownIcon}>💪</Text>
           <Text style={styles.countdownText}>
             Complete a session this week to start a new streak!
           </Text>
@@ -75,7 +72,7 @@ export default function StreakCard({ stats, sessionsThisWeek = 0 }) {
       {perfectWeek && (
         <View style={styles.perfectWeekBanner}>
           <Text style={styles.perfectWeekText}>
-            ⭐ Perfect Week! {PERFECT_WEEK_THRESHOLD}+ sessions completed — +200 bonus XP!
+            Perfect Week! {PERFECT_WEEK_THRESHOLD}+ sessions completed — +200 bonus XP!
           </Text>
         </View>
       )}
@@ -84,7 +81,7 @@ export default function StreakCard({ stats, sessionsThisWeek = 0 }) {
       {!perfectWeek && sessionsThisWeek > 0 && (
         <View style={styles.perfectProgress}>
           <Text style={styles.perfectProgressText}>
-            📊 {sessionsThisWeek}/{PERFECT_WEEK_THRESHOLD} sessions this week
+            {sessionsThisWeek}/{PERFECT_WEEK_THRESHOLD} sessions this week
             {sessionsThisWeek === PERFECT_WEEK_THRESHOLD - 1
               ? ' — 1 more for a Perfect Week bonus!'
               : ''}
@@ -113,9 +110,6 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     flex: 1,
   },
-  streakIcon: {
-    fontSize: 28,
-  },
   streakTitle: {
     fontSize: FONT_SIZES.md,
     fontWeight: '800',
@@ -143,9 +137,6 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-  },
-  countdownIcon: {
-    fontSize: 14,
   },
   countdownText: {
     fontSize: FONT_SIZES.xs,

@@ -13,7 +13,7 @@ import { useAuth, useWallet } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES, SESSION_STATUS_LABELS } from '../../utils/constants';
 import { formatDate, formatTime, formatDuration } from '../../utils/helpers';
-import { notify } from '../../utils/alert';
+import { notify, toast } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
 const STATUS_TONE = { pending: 'warning', completed: 'success', cancelled: 'danger' };
@@ -104,10 +104,7 @@ export default function SessionDetailScreen() {
       await api.confirmSessionSide(session.session_id);
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
       await queryClient.invalidateQueries({ queryKey: ['session', id] });
-      notify(
-        'Trade confirmed 🤝',
-        'Your partner still needs to confirm for the session to complete.',
-      );
+      toast('Trade confirmed', 'Your partner still needs to confirm for the session to complete.');
     } catch (err) {
       notify('Could not confirm trade', toUserMessage(err));
     } finally {
@@ -123,8 +120,8 @@ export default function SessionDetailScreen() {
       await queryClient.invalidateQueries({ queryKey: ['session', id] });
       await queryClient.invalidateQueries({ queryKey: ['user-stats'] });
       await refreshWallet();
-      notify(
-        'Session completed! 🎉',
+      toast(
+        'Session completed!',
         'You earned +100 XP, extended your weekly streak, and earned a time token!',
       );
     } catch (err) {
@@ -192,10 +189,10 @@ export default function SessionDetailScreen() {
           <View style={styles.checkin}>
             <Text style={styles.checkinTitle}>Check in</Text>
             <Text style={styles.checkinRow}>
-              You: {myCheckedIn ? '✅ Checked in' : 'Not checked in yet'}
+              You: {myCheckedIn ? 'Checked in' : 'Not checked in yet'}
             </Text>
             <Text style={styles.checkinRow}>
-              Your {partnerLabel}: {partnerCheckedIn ? '✅ Checked in' : 'Not checked in yet'}
+              Your {partnerLabel}: {partnerCheckedIn ? 'Checked in' : 'Not checked in yet'}
             </Text>
           </View>
         )}
@@ -204,16 +201,16 @@ export default function SessionDetailScreen() {
           <View style={styles.checkin}>
             <Text style={styles.checkinTitle}>Confirm the skill trade</Text>
             <Text style={styles.checkinRow}>
-              You: {myConfirmed ? '✅ Confirmed' : 'Not confirmed yet'}
+              You: {myConfirmed ? 'Confirmed' : 'Not confirmed yet'}
             </Text>
             <Text style={styles.checkinRow}>
-              Your {partnerLabel}: {partnerConfirmed ? '✅ Confirmed' : 'Not confirmed yet'}
+              Your {partnerLabel}: {partnerConfirmed ? 'Confirmed' : 'Not confirmed yet'}
             </Text>
             {!myCheckedIn ? (
               <Text style={styles.checkinHint}>Check in first, then confirm the trade.</Text>
             ) : !myConfirmed ? (
               <Button
-                title="I confirm the trade happened 🤝"
+                title="I confirm the trade happened"
                 onPress={handleConfirmTrade}
                 loading={busy}
               />
@@ -233,11 +230,11 @@ export default function SessionDetailScreen() {
         {session.status === 'pending' && (
           <View style={styles.actions}>
             <Button
-              title={`Scan your ${partnerLabel}'s code 📷`}
+              title={`Scan your ${partnerLabel}'s code`}
               onPress={() => router.push(`/sessions/${session.session_id}/check-in`)}
             />
             <Button
-              title="Add to Calendar 📅"
+              title="Add to Calendar"
               variant="secondary"
               onPress={() => setShowCalendarModal(true)}
             />

@@ -59,7 +59,7 @@ export default function XPProgressBar({ xp = 0, levelInfo, compact = false }) {
           {xp.toLocaleString()} XP
         </Text>
         <Text style={compact ? styles.xpTextCompact : styles.xpText}>
-          {isMax ? '🏆 Max Level' : `${xpNeeded.toLocaleString()} XP to next level`}
+          {isMax ? 'Max Level' : `${xpNeeded.toLocaleString()} XP to next level`}
         </Text>
       </View>
     </View>

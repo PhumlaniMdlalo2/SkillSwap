@@ -2,19 +2,10 @@ import React from 'react';
 import { View, Text, Modal, StyleSheet, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
-import {
-  openGoogleCalendar,
-  openOutlookCalendar,
-  generateIcsContent,
-} from '../../utils/calendar';
-import { notify } from '../../utils/alert';
+import { openGoogleCalendar, openOutlookCalendar, generateIcsContent } from '../../utils/calendar';
+import { notify, toast } from '../../utils/alert';
 
-export default function AddToCalendarModal({
-  visible,
-  onClose,
-  session,
-  isTeacher,
-}) {
+export default function AddToCalendarModal({ visible, onClose, session, isTeacher }) {
   if (!session) return null;
 
   const handleGoogle = async () => {
@@ -49,7 +40,7 @@ export default function AddToCalendarModal({
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        notify('Downloaded! 📅', '.ics calendar file downloaded.');
+        toast('Downloaded!', '.ics calendar file downloaded.');
       } else {
         // Fallback to Google Calendar on mobile if file system write is not needed
         handleGoogle();
@@ -65,16 +56,12 @@ export default function AddToCalendarModal({
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.content} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
-            <Text style={styles.title}>Add to Calendar 📅</Text>
+            <Text style={styles.title}>Add to Calendar</Text>
             <Text style={styles.subtitle}>Never miss your upcoming skill exchange.</Text>
           </View>
 
           <View style={styles.optionsList}>
-            <Pressable
-              style={styles.optionRow}
-              onPress={handleGoogle}
-              accessibilityRole="button"
-            >
+            <Pressable style={styles.optionRow} onPress={handleGoogle} accessibilityRole="button">
               <View style={[styles.iconWrap, { backgroundColor: '#E8F0FE' }]}>
                 <Ionicons name="logo-google" size={20} color="#1A73E8" />
               </View>
@@ -85,11 +72,7 @@ export default function AddToCalendarModal({
               <Ionicons name="chevron-forward" size={18} color={COLORS.textFaint} />
             </Pressable>
 
-            <Pressable
-              style={styles.optionRow}
-              onPress={handleOutlook}
-              accessibilityRole="button"
-            >
+            <Pressable style={styles.optionRow} onPress={handleOutlook} accessibilityRole="button">
               <View style={[styles.iconWrap, { backgroundColor: '#E3F2FD' }]}>
                 <Ionicons name="calendar-outline" size={20} color="#0078D4" />
               </View>

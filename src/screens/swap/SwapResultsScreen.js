@@ -55,7 +55,7 @@ export default function SwapResultsScreen() {
 
         <View style={styles.actions}>
           <Button
-            title={`Message ${candidate?.name?.split(' ')[0] ?? 'Partner'} 💬`}
+            title={`Message ${candidate?.name?.split(' ')[0] ?? 'Partner'}`}
             variant="secondary"
             style={{ backgroundColor: COLORS.white, marginBottom: SPACING.xs }}
             onPress={async () => {

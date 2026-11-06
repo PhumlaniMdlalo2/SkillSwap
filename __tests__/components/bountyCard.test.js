@@ -113,8 +113,8 @@ describe('BountyCard — skill-trade proof', () => {
       />,
     );
 
-    expect(getByText('💞 Trade in progress')).toBeTruthy();
-    fireEvent.press(getByLabelText('I did my side 🤝'));
+    expect(getByText('Trade in progress')).toBeTruthy();
+    fireEvent.press(getByLabelText('I did my side'));
 
     expect(onConfirmTrade).toHaveBeenCalledWith('t1');
   });
@@ -142,6 +142,6 @@ describe('BountyCard — skill-trade proof', () => {
       />,
     );
 
-    expect(getByText('✅ Trade confirmed by both sides')).toBeTruthy();
+    expect(getByText('Trade confirmed by both sides')).toBeTruthy();
   });
 });

@@ -7,7 +7,7 @@ import Button from '../../components/ui/Button';
 import { useAuth } from '../../store/useAppHooks';
 import { requestPasswordReset } from '../../services/auth';
 import { toUserMessage } from '../../utils/errors';
-import { notify } from '../../utils/alert';
+import { toast } from '../../utils/alert';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function VerifyCodeScreen() {
@@ -46,7 +46,7 @@ export default function VerifyCodeScreen() {
     setError(null);
     try {
       await requestPasswordReset(email);
-      notify('Check your email', `We sent a new code to ${email}.`);
+      toast('Check your email', `We sent a new code to ${email}.`);
     } catch (err) {
       setError(toUserMessage(err, 'Could not send a new code. Please try again.'));
     } finally {
@@ -79,7 +79,12 @@ export default function VerifyCodeScreen() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Button title="Verify code" onPress={handleSubmit} disabled={!canSubmit} loading={loading} />
+          <Button
+            title="Verify code"
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+            loading={loading}
+          />
 
           <Button
             title={resendLoading ? 'Sending…' : 'Resend code'}

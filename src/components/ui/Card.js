@@ -13,7 +13,8 @@ export default function Card({ children, style, onPress, padded = true, accessib
       accessible
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
+      android_ripple={{ color: 'rgba(0, 0, 0, 0.06)' }}
+      style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, borderRadius: RADII.lg }]}
     >
       {content}
     </Pressable>

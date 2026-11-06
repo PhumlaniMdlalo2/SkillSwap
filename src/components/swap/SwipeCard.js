@@ -34,7 +34,7 @@ export default function SwipeCard({
   nopeOpacityStyle,
 }) {
   const dimensionStyle = { width: cardWidth, height: cardHeight };
-  const photoHeight = cardHeight * 0.4;
+  const photoHeight = cardHeight * 0.34;
 
   const summary = [
     candidate.name,
@@ -208,8 +208,10 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    padding: SPACING.md,
-    gap: SPACING.xs + 2,
+    padding: SPACING.sm,
+    paddingBottom: SPACING.xl,
+    paddingSide: SPACING.md,
+    gap: SPACING.xs + 5,
   },
   nameRow: {
     flexDirection: 'row',

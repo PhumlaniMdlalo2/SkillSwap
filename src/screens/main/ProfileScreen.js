@@ -18,8 +18,10 @@ import Avatar from '../../components/ui/Avatar';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import ErrorState from '../../components/ui/ErrorState';
+import Modal from '../../components/ui/Modal';
 import XPProgressBar from '../../components/gamification/XPProgressBar';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
@@ -28,11 +30,16 @@ import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 import { confirmAction, notify } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
+const BIO_MAX_LENGTH = 300;
+
 export default function ProfileScreen() {
   const { user, logout, updateUser } = useAuth();
   const queryClient = useQueryClient();
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [bioModalVisible, setBioModalVisible] = useState(false);
+  const [bioDraft, setBioDraft] = useState('');
+  const [savingBio, setSavingBio] = useState(false);
 
   const { data: userStats, refetch: refetchStats } = useQuery({
     queryKey: ['user-stats', user?.user_id],
@@ -141,6 +148,31 @@ export default function ProfileScreen() {
     }
   };
 
+  const openBioEditor = () => {
+    setBioDraft(user?.bio ?? '');
+    setBioModalVisible(true);
+  };
+
+  const handleSaveBio = async () => {
+    if (!user || savingBio) return;
+    const nextBio = bioDraft.trim();
+    if (nextBio === (user.bio ?? '').trim()) {
+      setBioModalVisible(false);
+      return;
+    }
+    setSavingBio(true);
+    try {
+      const updated = await api.updateBio({ userId: user.user_id, bio: nextBio });
+      updateUser({ ...user, ...updated });
+      setBioModalVisible(false);
+      notify('Bio saved', 'Your bio has been updated.');
+    } catch (err) {
+      notify('Could not save your bio', toUserMessage(err));
+    } finally {
+      setSavingBio(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -177,7 +209,19 @@ export default function ProfileScreen() {
             {user?.name}
           </Text>
           <Text style={styles.email}>{user?.email}</Text>
-          {user?.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+          <Text style={styles.bio}>
+            {user?.bio?.trim() || 'Add a bio so people know what you teach.'}
+          </Text>
+          <Pressable
+            onPress={openBioEditor}
+            accessibilityRole="button"
+            accessibilityLabel={user?.bio ? 'Edit bio' : 'Add bio'}
+            hitSlop={12}
+            style={styles.bioEditButton}
+          >
+            <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
+            <Text style={styles.bioEditText}>{user?.bio ? 'Edit bio' : 'Add bio'}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.statsRow}>
@@ -191,7 +235,6 @@ export default function ProfileScreen() {
           <Card style={styles.xpCard} onPress={() => router.push('/passport')}>
             <View style={styles.xpCardHeader}>
               <View style={styles.xpCardLeft}>
-                <Text style={styles.xpCardIcon}>⚡</Text>
                 <Text style={styles.xpCardTitle}>{userStats.levelInfo?.title ?? 'Novice'}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={COLORS.textFaint} />
@@ -270,6 +313,27 @@ export default function ProfileScreen() {
           style={{ marginTop: SPACING.lg }}
         />
       </ScrollView>
+
+      <Modal visible={bioModalVisible} onClose={() => setBioModalVisible(false)} title="Edit bio">
+        <Input
+          label="Bio"
+          value={bioDraft}
+          onChangeText={setBioDraft}
+          placeholder="Tell people what you love to teach and learn…"
+          multiline
+          maxLength={BIO_MAX_LENGTH}
+        />
+        <Text style={styles.bioCounter}>
+          {bioDraft.length}/{BIO_MAX_LENGTH}
+        </Text>
+        <Button title="Save bio" onPress={handleSaveBio} loading={savingBio} />
+        <Button
+          title="Cancel"
+          variant="ghost"
+          onPress={() => setBioModalVisible(false)}
+          style={styles.bioCancel}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -340,6 +404,29 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     paddingHorizontal: SPACING.lg,
   },
+  bioEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: SPACING.xs,
+    paddingVertical: 2,
+    paddingHorizontal: SPACING.sm,
+  },
+  bioEditText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  bioCounter: {
+    alignSelf: 'flex-end',
+    marginTop: -SPACING.sm,
+    marginBottom: SPACING.md,
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.textFaint,
+  },
+  bioCancel: {
+    marginTop: SPACING.sm,
+  },
   statsRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
@@ -372,9 +459,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-  },
-  xpCardIcon: {
-    fontSize: 16,
   },
   xpCardTitle: {
     fontSize: FONT_SIZES.sm,

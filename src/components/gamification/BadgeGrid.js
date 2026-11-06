@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Share, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Share, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Modal from '../ui/Modal';
 import { COLORS, SPACING, FONT_SIZES, RADII, ENDORSEMENT_BADGES } from '../../utils/constants';
 
@@ -10,7 +11,7 @@ function BadgeDetailModal({ visible, onClose, badge }) {
   if (!badge) return null;
 
   const handleShare = async () => {
-    const message = `🏅 I earned the "${badge.label}" ${badge.emoji} badge ${badge.count} time${badge.count === 1 ? '' : 's'} on SkillSwap!`;
+    const message = `I earned the "${badge.label}" badge ${badge.count} time${badge.count === 1 ? '' : 's'} on SkillSwap!`;
     try {
       if (Platform.OS === 'web') {
         if (navigator.share) {
@@ -29,9 +30,6 @@ function BadgeDetailModal({ visible, onClose, badge }) {
   return (
     <Modal visible={visible} onClose={onClose} title="Badge Details">
       <View style={modalStyles.content}>
-        <View style={modalStyles.emojiCircle}>
-          <Text style={modalStyles.bigEmoji}>{badge.emoji}</Text>
-        </View>
         <Text style={modalStyles.badgeName}>{badge.label}</Text>
         <Text style={modalStyles.description}>{getBadgeDescription(badge.key)}</Text>
 
@@ -47,7 +45,7 @@ function BadgeDetailModal({ visible, onClose, badge }) {
         </View>
 
         <Pressable style={modalStyles.shareButton} onPress={handleShare}>
-          <Text style={modalStyles.shareButtonText}>Share Badge 🔗</Text>
+          <Text style={modalStyles.shareButtonText}>Share Badge</Text>
         </Pressable>
       </View>
     </Modal>
@@ -59,7 +57,7 @@ function BadgeDetailModal({ visible, onClose, badge }) {
  * Tapping a badge opens the detail modal.
  *
  * Props:
- *   endorsements — array of { key, label, emoji, count }
+ *   endorsements — array of { key, label, count }
  *   showAll      — if true, shows unearned badges greyed out too
  */
 export default function BadgeGrid({ endorsements = [], showAll = false }) {
@@ -101,9 +99,11 @@ export default function BadgeGrid({ endorsements = [], showAll = false }) {
               accessibilityRole="button"
               accessibilityLabel={`${badge.label}: earned ${badge.count} times`}
             >
-              <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiUnearned]}>
-                {badge.emoji}
-              </Text>
+              <Ionicons
+                name={badge.icon}
+                size={22}
+                color={earned ? COLORS.primary : COLORS.textFaint}
+              />
               <Text
                 style={[styles.badgeLabel, !earned && styles.badgeLabelUnearned]}
                 numberOfLines={2}
@@ -114,9 +114,7 @@ export default function BadgeGrid({ endorsements = [], showAll = false }) {
                 <View style={styles.countTag}>
                   <Text style={styles.countText}>×{badge.count}</Text>
                 </View>
-              ) : (
-                <Text style={styles.lockedText}>🔒</Text>
-              )}
+              ) : null}
             </Pressable>
           );
         })}
@@ -135,10 +133,13 @@ export default function BadgeGrid({ endorsements = [], showAll = false }) {
 
 function getBadgeDescription(key) {
   const descriptions = {
-    explains_simply: 'Awarded to teachers who break down complex topics into easy, digestible explanations.',
-    infinite_patience: 'Given to partners who show exceptional patience — never rushing, always encouraging.',
-    super_punctual: 'For those who always show up on time, respecting everyone\'s schedule.',
-    practical_exercises: 'Earned by teachers who create engaging, hands-on exercises that make learning stick.',
+    explains_simply:
+      'Awarded to teachers who break down complex topics into easy, digestible explanations.',
+    infinite_patience:
+      'Given to partners who show exceptional patience — never rushing, always encouraging.',
+    super_punctual: "For those who always show up on time, respecting everyone's schedule.",
+    practical_exercises:
+      'Earned by teachers who create engaging, hands-on exercises that make learning stick.',
     conversational_pro: 'For partners who keep sessions lively, interactive, and conversational.',
     hands_on: 'Awarded to those who focus on practical, real-world applications over theory.',
   };
@@ -146,11 +147,11 @@ function getBadgeDescription(key) {
 }
 
 function getBadgeRarity(count) {
-  if (count >= 20) return '💎 Legendary';
-  if (count >= 10) return '🌟 Epic';
-  if (count >= 5) return '✨ Rare';
-  if (count >= 1) return '🟢 Common';
-  return '⬜ Locked';
+  if (count >= 20) return 'Legendary';
+  if (count >= 10) return 'Epic';
+  if (count >= 5) return 'Rare';
+  if (count >= 1) return 'Common';
+  return 'Locked';
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────
@@ -176,12 +177,6 @@ const styles = StyleSheet.create({
     opacity: 0.45,
     backgroundColor: COLORS.background,
   },
-  badgeEmoji: {
-    fontSize: 24,
-  },
-  badgeEmojiUnearned: {
-    opacity: 0.5,
-  },
   badgeLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -202,9 +197,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
   },
-  lockedText: {
-    fontSize: 12,
-  },
   emptyWrap: {
     paddingVertical: SPACING.md,
   },
@@ -220,18 +212,6 @@ const modalStyles = StyleSheet.create({
   content: {
     alignItems: 'center',
     paddingBottom: SPACING.md,
-  },
-  emojiCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.sm,
-  },
-  bigEmoji: {
-    fontSize: 36,
   },
   badgeName: {
     fontSize: FONT_SIZES.xl,

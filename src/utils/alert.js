@@ -26,3 +26,21 @@ export function notify(title, message, onDismiss) {
   }
   Alert.alert(title, message, onDismiss ? [{ text: 'OK', onPress: onDismiss }] : undefined);
 }
+
+let toastListener = null;
+let toastTimer = null;
+
+export function subscribeToast(listener) {
+  toastListener = listener;
+  return () => {
+    if (toastListener === listener) toastListener = null;
+  };
+}
+
+// Non-blocking success feedback. Errors keep using notify()/Alert.
+export function toast(title, message) {
+  if (!toastListener) return;
+  clearTimeout(toastTimer);
+  toastListener({ title, message });
+  toastTimer = setTimeout(() => toastListener?.(null), 3000);
+}

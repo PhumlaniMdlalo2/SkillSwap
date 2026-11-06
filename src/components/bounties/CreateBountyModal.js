@@ -15,9 +15,9 @@ import Button from '../ui/Button';
 import { COLORS, SPACING, FONT_SIZES, RADII, SKILL_CATEGORIES } from '../../utils/constants';
 
 const URGENCY_OPTIONS = [
-  { key: 'urgent', label: '🔥 Urgent (24-48h)' },
-  { key: 'this_week', label: '⚡ This Week' },
-  { key: 'flexible', label: '☕ Flexible' },
+  { key: 'urgent', label: 'Urgent (24-48h)' },
+  { key: 'this_week', label: 'This Week' },
+  { key: 'flexible', label: 'Flexible' },
 ];
 
 export default function CreateBountyModal({ visible, onClose, onSubmit, submitting }) {
@@ -68,7 +68,7 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Post a Bounty 🎯</Text>
+              <Text style={styles.title}>Post a Bounty</Text>
               <Text style={styles.subtitle}>Ask the community for urgent or tailored help.</Text>
             </View>
             <Pressable onPress={handleReset} hitSlop={12} accessibilityRole="button">
@@ -76,7 +76,11 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.body}
+            keyboardShouldPersistTaps="handled"
+          >
             {/* Title */}
             <Text style={styles.label}>What do you need help with? *</Text>
             <TextInput
@@ -90,7 +94,11 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
 
             {/* Category */}
             <Text style={styles.label}>Category *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipsScroll}
+            >
               <View style={styles.chipsRow}>
                 {SKILL_CATEGORIES.map((cat) => (
                   <Pressable
@@ -132,7 +140,7 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
                     rewardType === 'token' && styles.segmentBtnTextActive,
                   ]}
                 >
-                  🪙 Time Tokens
+                  Time Tokens
                 </Text>
               </Pressable>
               <Pressable
@@ -145,7 +153,7 @@ export default function CreateBountyModal({ visible, onClose, onSubmit, submitti
                     rewardType === 'swap' && styles.segmentBtnTextActive,
                   ]}
                 >
-                  🔄 Skill Trade
+                  Skill Trade
                 </Text>
               </Pressable>
             </View>
@@ -348,7 +356,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   amountPillTextActive: {
-    color: COLORS.token,
+    color: COLORS.tokenText,
   },
   urgencyRow: {
     flexDirection: 'row',

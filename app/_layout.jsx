@@ -12,17 +12,17 @@ import { queryClient } from '../src/store/queryClient';
 import { COLORS } from '../src/utils/constants';
 import { isSupabaseConfigured } from '../src/services/supabase';
 import ConfigErrorScreen from '../src/screens/ConfigErrorScreen';
+import Toast from '../src/components/ui/Toast';
 
 // Cached data belongs to one account — drop it whenever the signed-in user
 // changes so a second login never sees the previous user's responses.
 function QueryCacheReset() {
   const { user } = useAuth();
   const client = useQueryClient();
-  const userId = user?.user_id ?? null;
 
   useEffect(() => {
     client.clear();
-  }, [client, userId]);
+  }, [client, user]);
 
   return null;
 }
@@ -43,59 +43,47 @@ function RootStack() {
         contentStyle: { backgroundColor: COLORS.background },
       }}
     >
-      {/* Unguarded: acts as the redirect anchor for failed guards */}
       <Stack.Screen name="index" />
-      {/* Unguarded: a recovery deep link lands here before auth state has
-          settled; the screen itself bounces to login if there's no session. */}
       <Stack.Screen name="reset-password" />
-      {/* Unguarded: entered straight from login while still signed out; a
-          successful code verification lands on reset-password. */}
       <Stack.Screen name="verify-code" />
-      <Stack.Protected guard={!isAuthenticated}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-      <Stack.Protected guard={authed}>
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="skills/[id]" options={{ headerShown: true, title: 'Skill' }} />
-        <Stack.Screen
-          name="skills/add"
-          options={{ headerShown: true, title: 'Add a Skill', presentation: 'modal' }}
-        />
-        <Stack.Screen name="skills/my-skills" options={{ headerShown: true, title: 'My Skills' }} />
-        <Stack.Screen name="profile/[id]" options={{ headerShown: true, title: 'Profile' }} />
-        <Stack.Screen name="requests/index" options={{ headerShown: true, title: 'Requests' }} />
-        <Stack.Screen
-          name="requests/[id]/schedule"
-          options={{ headerShown: true, title: 'Book Appointment' }}
-        />
-        <Stack.Screen
-          name="wallet/transactions"
-          options={{ headerShown: true, title: 'Transactions' }}
-        />
-        <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
-        <Stack.Screen name="passport" options={{ headerShown: true, title: 'Skill Passport' }} />
-        <Stack.Screen name="sessions/index" options={{ headerShown: true, title: 'My Sessions' }} />
-        <Stack.Screen
-          name="sessions/[id]/index"
-          options={{ headerShown: true, title: 'Session' }}
-        />
-        <Stack.Screen
-          name="sessions/[id]/check-in"
-          options={{ headerShown: true, title: 'Check In', presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="sessions/[id]/review"
-          options={{ headerShown: true, title: 'Leave a Review', presentation: 'modal' }}
-        />
-        <Stack.Screen name="swap/[id]" />
-        <Stack.Screen name="swap/results" options={{ presentation: 'fullScreenModal' }} />
-        <Stack.Screen name="swap/history" options={{ headerShown: true, title: 'Swap History' }} />
-        <Stack.Screen
-          name="swap/settings"
-          options={{ headerShown: true, title: 'Skill Match Settings' }}
-        />
-      </Stack.Protected>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="skills/[id]" options={{ headerShown: true, title: 'Skill' }} />
+      <Stack.Screen
+        name="skills/add"
+        options={{ headerShown: true, title: 'Add a Skill', presentation: 'modal' }}
+      />
+      <Stack.Screen name="skills/my-skills" options={{ headerShown: true, title: 'My Skills' }} />
+      <Stack.Screen name="profile/[id]" options={{ headerShown: true, title: 'Profile' }} />
+      <Stack.Screen name="requests/index" options={{ headerShown: true, title: 'Requests' }} />
+      <Stack.Screen
+        name="requests/[id]/schedule"
+        options={{ headerShown: true, title: 'Book Appointment' }}
+      />
+      <Stack.Screen
+        name="wallet/transactions"
+        options={{ headerShown: true, title: 'Transactions' }}
+      />
+      <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
+      <Stack.Screen name="passport" options={{ headerShown: true, title: 'Skill Passport' }} />
+      <Stack.Screen name="sessions/index" options={{ headerShown: true, title: 'My Sessions' }} />
+      <Stack.Screen name="sessions/[id]/index" options={{ headerShown: true, title: 'Session' }} />
+      <Stack.Screen
+        name="sessions/[id]/check-in"
+        options={{ headerShown: true, title: 'Check In', presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="sessions/[id]/review"
+        options={{ headerShown: true, title: 'Leave a Review', presentation: 'modal' }}
+      />
+      <Stack.Screen name="swap/[id]" />
+      <Stack.Screen name="swap/results" options={{ presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="swap/history" options={{ headerShown: true, title: 'Swap History' }} />
+      <Stack.Screen
+        name="swap/settings"
+        options={{ headerShown: true, title: 'Skill Match Settings' }}
+      />
     </Stack>
   );
 }
@@ -118,6 +106,7 @@ export default function RootLayout() {
             <WalletProvider>
               <StatusBar style="dark" />
               <RootStack />
+              <Toast />
             </WalletProvider>
           </QueryClientProvider>
         </AuthProvider>

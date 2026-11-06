@@ -25,10 +25,10 @@ import { notify } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
 const ICEBREAKERS = [
-  '👋 Hi! Excited to swap skills!',
-  '📅 What days work best for you?',
-  '🎯 What is your current level with this skill?',
-  '☕ Want to do a quick 15-min intro call?',
+  'Hi! Excited to swap skills!',
+  'What days work best for you?',
+  'What is your current level with this skill?',
+  'Want to do a quick 15-min intro call?',
 ];
 
 export default function ChatScreen() {
@@ -184,7 +184,7 @@ export default function ChatScreen() {
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="sparkles" size={32} color={COLORS.primary} />
               </View>
-              <Text style={styles.emptyTitle}>It's a Match! 🎉</Text>
+              <Text style={styles.emptyTitle}>It's a Match!</Text>
               <Text style={styles.emptySubtitle}>
                 Say hello to {partner?.name ?? 'your partner'} and arrange your skill swap session.
               </Text>

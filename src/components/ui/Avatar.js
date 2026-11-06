@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../../utils/constants';
 import { getInitials } from '../../utils/helpers';
 
 export default function Avatar({ uri, name, size = 48 }) {
+  const [failedUri, setFailedUri] = useState(null);
   const dimensionStyle = { width: size, height: size, borderRadius: size / 2 };
 
-  if (uri) {
+  if (uri && failedUri !== uri) {
     return (
       <Image
         source={{ uri }}
         style={[styles.image, dimensionStyle]}
+        onError={() => setFailedUri(uri)}
         accessible
         accessibilityRole="image"
         accessibilityLabel={name ? `Photo of ${name}` : 'Profile photo'}

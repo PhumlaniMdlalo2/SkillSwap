@@ -5,7 +5,7 @@ import { COLORS, RADII, SPACING, FONT_SIZES } from '../../utils/constants';
 const TONES = {
   neutral: { bg: COLORS.primaryLight, fg: COLORS.primary },
   success: { bg: COLORS.secondaryLight, fg: COLORS.secondary },
-  warning: { bg: COLORS.tokenLight, fg: COLORS.token },
+  warning: { bg: COLORS.tokenLight, fg: COLORS.tokenText },
   danger: { bg: COLORS.dangerLight, fg: COLORS.danger },
 };
 

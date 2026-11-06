@@ -6,12 +6,12 @@ import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
 import { timeAgo } from '../../utils/helpers';
-import { notify, confirmAction } from '../../utils/alert';
+import { notify, confirmAction, toast } from '../../utils/alert';
 
 const URGENCY_CONFIG = {
-  urgent: { label: '🔥 Urgent', bg: COLORS.dangerLight, color: COLORS.danger },
-  this_week: { label: '⚡ This Week', bg: COLORS.tokenLight, color: COLORS.token },
-  flexible: { label: '☕ Flexible', bg: COLORS.primaryLight, color: COLORS.primary },
+  urgent: { label: 'Urgent', bg: COLORS.dangerLight, color: COLORS.danger },
+  this_week: { label: 'This Week', bg: COLORS.tokenLight, color: COLORS.tokenText },
+  flexible: { label: 'Flexible', bg: COLORS.primaryLight, color: COLORS.primary },
 };
 
 export default function BountyCard({
@@ -45,7 +45,7 @@ export default function BountyCard({
       await onMakeOffer?.(bounty.id, offerMessage);
       setShowOfferInput(false);
       setOfferMessage('');
-      notify('Offer Sent! 🎉', 'The creator has been notified of your offer to help.');
+      toast('Offer Sent!', 'The creator has been notified of your offer to help.');
     } catch (err) {
       notify('Could not send offer', err.message || 'Please try again.');
     } finally {
@@ -100,7 +100,6 @@ export default function BountyCard({
         <View style={styles.rewardPill}>
           {bounty.rewardType === 'token' ? (
             <>
-              <Text style={styles.tokenIcon}>🪙</Text>
               <Text style={styles.rewardText}>
                 {bounty.tokenAmount} Token{bounty.tokenAmount === 1 ? '' : 's'}
               </Text>
@@ -160,7 +159,7 @@ export default function BountyCard({
         <View style={styles.tradeSection}>
           <Text style={styles.tradeSectionTitle}>Offers — pick a helper</Text>
           {bounty.offers.map((offer) => (
-            <View key={offer.id} style={styles.offerRow}>
+            <View key={offer.id ?? offer.helperId} style={styles.offerRow}>
               <Avatar uri={offer.helper?.avatar} name={offer.helper?.name} size={28} />
               <View style={styles.offerMeta}>
                 <Text style={styles.offerName} numberOfLines={1}>
@@ -172,18 +171,12 @@ export default function BountyCard({
                   </Text>
                 )}
               </View>
-              {offer.status === 'accepted' ? (
-                <Text style={styles.acceptedText}>Accepted</Text>
-              ) : offer.status === 'declined' ? (
-                <Text style={styles.declinedText}>Declined</Text>
-              ) : (
-                <Button
-                  title="Accept"
-                  size="sm"
-                  fullWidth={false}
-                  onPress={() => onAcceptOffer?.(bounty.id, offer.id)}
-                />
-              )}
+              <Button
+                title="Accept"
+                size="sm"
+                fullWidth={false}
+                onPress={() => onAcceptOffer?.(bounty.id, offer.id)}
+              />
             </View>
           ))}
         </View>
@@ -191,28 +184,28 @@ export default function BountyCard({
 
       {isTradePartner && tradeInProgress && (
         <View style={styles.tradeSection}>
-          <Text style={styles.tradeSectionTitle}>💞 Trade in progress</Text>
+          <Text style={styles.tradeSectionTitle}>Trade in progress</Text>
           <Text style={styles.tradeRow}>
-            You: {myTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}
+            You: {myTradeConfirmed ? 'Confirmed' : 'Not confirmed'}
           </Text>
           <Text style={styles.tradeRow}>
-            Your trade partner: {partnerTradeConfirmed ? '✅ Confirmed' : 'Not confirmed'}
+            Your trade partner: {partnerTradeConfirmed ? 'Confirmed' : 'Not confirmed'}
           </Text>
           {myTradeConfirmed ? (
             <Text style={styles.tradeHint}>
               {partnerTradeConfirmed
-                ? 'Trade confirmed by both sides — nice work! 🎉'
+                ? 'Trade confirmed by both sides — nice work!'
                 : 'Waiting for your trade partner to confirm (auto-completes 72h after acceptance).'}
             </Text>
           ) : (
-            <Button title="I did my side 🤝" size="sm" onPress={() => onConfirmTrade?.(trade.id)} />
+            <Button title="I did my side" size="sm" onPress={() => onConfirmTrade?.(trade.id)} />
           )}
         </View>
       )}
 
       {isTradePartner && tradeDone && (
         <View style={[styles.tradeSection, styles.tradeSectionDone]}>
-          <Text style={styles.tradeDoneText}>✅ Trade confirmed by both sides</Text>
+          <Text style={styles.tradeDoneText}>Trade confirmed by both sides</Text>
         </View>
       )}
 
@@ -238,7 +231,7 @@ export default function BountyCard({
             </View>
           ) : bounty.status === 'open' ? (
             <Button
-              title="I Can Help 🤝"
+              title="I Can Help"
               variant="primary"
               size="sm"
               style={styles.helpButton}
@@ -340,12 +333,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs - 2,
     borderRadius: RADII.round,
   },
-  tokenIcon: {
-    fontSize: 12,
-  },
   rewardText: {
     fontSize: 11,
-    color: COLORS.token,
+    color: COLORS.tokenText,
     fontWeight: '700',
   },
   offersPill: {

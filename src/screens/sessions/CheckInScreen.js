@@ -10,7 +10,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { COLORS, SPACING, FONT_SIZES, RADII } from '../../utils/constants';
-import { notify } from '../../utils/alert';
+import { notify, toast } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
 export default function CheckInScreen() {
@@ -85,7 +85,7 @@ export default function CheckInScreen() {
       await api.checkInSession({ sessionId: id, ownerRole: payload.ownerRole, code: payload.code });
       await queryClient.invalidateQueries({ queryKey: ['session', id] });
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      notify('Checked in', 'Your attendance has been recorded.');
+      toast('Checked in', 'Your attendance has been recorded.');
       router.back();
     } catch (err) {
       notify('Could not check in', toUserMessage(err));

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +20,7 @@ import { useAuth } from '../../store/useAppHooks';
 import * as api from '../../services/api';
 import { gamificationService } from '../../services/gamificationService';
 import { COLORS, SPACING, FONT_SIZES, RADII, ENDORSEMENT_BADGES } from '../../utils/constants';
-import { notify } from '../../utils/alert';
+import { notify, toast } from '../../utils/alert';
 import { toUserMessage } from '../../utils/errors';
 
 export default function LeaveReviewScreen() {
@@ -75,7 +83,7 @@ export default function LeaveReviewScreen() {
 
       await queryClient.invalidateQueries({ queryKey: ['reviews'] });
       await queryClient.invalidateQueries({ queryKey: ['endorsements'] });
-      notify('Review submitted! 🌟', 'Thank you for endorsing your partner!');
+      toast('Review submitted!', 'Thank you for endorsing your partner!');
       router.back();
     } catch (err) {
       notify('Could not save your review', toUserMessage(err));
@@ -86,52 +94,56 @@ export default function LeaveReviewScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Leave a review</Text>
-        <Text style={styles.subtitle}>How was "{session.skill_title}"?</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.title}>Leave a review</Text>
+          <Text style={styles.subtitle}>How was "{session.skill_title}"?</Text>
 
-        <View style={styles.stars}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <Pressable key={value} onPress={() => setRating(value)} hitSlop={8}>
-              <Ionicons
-                name={value <= rating ? 'star' : 'star-outline'}
-                size={36}
-                color={COLORS.token}
-              />
-            </Pressable>
-          ))}
-        </View>
-
-        <Input
-          label="Comment (optional)"
-          placeholder="Share details about your experience…"
-          value={comment}
-          onChangeText={setComment}
-          multiline
-        />
-
-        {/* Skill Passport Badges */}
-        <Text style={styles.badgeSectionTitle}>Endorse their strengths (optional)</Text>
-        <View style={styles.badgesGrid}>
-          {ENDORSEMENT_BADGES.map((badge) => {
-            const isSelected = selectedBadges.includes(badge.key);
-            return (
-              <Pressable
-                key={badge.key}
-                onPress={() => toggleBadge(badge.key)}
-                style={[styles.badgeChip, isSelected && styles.badgeChipActive]}
-              >
-                <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
-                <Text style={[styles.badgeLabel, isSelected && styles.badgeLabelActive]}>
-                  {badge.label}
-                </Text>
+          <View style={styles.stars}>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <Pressable key={value} onPress={() => setRating(value)} hitSlop={8}>
+                <Ionicons
+                  name={value <= rating ? 'star' : 'star-outline'}
+                  size={36}
+                  color={COLORS.token}
+                />
               </Pressable>
-            );
-          })}
-        </View>
+            ))}
+          </View>
 
-        <Button title="Submit Review" onPress={handleSubmit} loading={submitting} />
-      </View>
+          <Input
+            label="Comment (optional)"
+            placeholder="Share details about your experience…"
+            value={comment}
+            onChangeText={setComment}
+            multiline
+          />
+
+          {/* Skill Passport Badges */}
+          <Text style={styles.badgeSectionTitle}>Endorse their strengths (optional)</Text>
+          <View style={styles.badgesGrid}>
+            {ENDORSEMENT_BADGES.map((badge) => {
+              const isSelected = selectedBadges.includes(badge.key);
+              return (
+                <Pressable
+                  key={badge.key}
+                  onPress={() => toggleBadge(badge.key)}
+                  style={[styles.badgeChip, isSelected && styles.badgeChipActive]}
+                >
+                  <Text style={[styles.badgeLabel, isSelected && styles.badgeLabelActive]}>
+                    {badge.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Button title="Submit Review" onPress={handleSubmit} loading={submitting} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -140,6 +152,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  flex: {
+    flex: 1,
   },
   content: {
     padding: SPACING.lg,
@@ -190,9 +205,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
     borderColor: COLORS.primary,
   },
-  badgeEmoji: {
-    fontSize: 14,
-  },
   badgeLabel: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.textMuted,
@@ -208,4 +220,3 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
 });
-

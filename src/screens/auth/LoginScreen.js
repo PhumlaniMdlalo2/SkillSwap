@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import LoginForm from '../../components/auth/LoginForm';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../store/useAppHooks';
@@ -10,8 +10,15 @@ import { toUserMessage } from '../../utils/errors';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const router = useRouter();
+  const { login, user, initializing } = useAuth();
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user && !initializing) {
+      router.replace('/(tabs)');
+    }
+  }, [user, initializing, router]);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [error, setError] = useState(null);
 

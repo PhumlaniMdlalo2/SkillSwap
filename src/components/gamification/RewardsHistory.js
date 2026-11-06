@@ -12,17 +12,16 @@ import { timeAgo } from '../../utils/helpers';
  * @property {'xp'|'badge'|'streak'|'perfect_week'|'level_up'} type
  * @property {string}  title
  * @property {string}  description
- * @property {string}  [emoji]
  * @property {number}  [xpAmount]
  * @property {string}  createdAt
  */
 
 const TYPE_META = {
-  xp: { emoji: '⚡', color: COLORS.primary },
-  badge: { emoji: '🏅', color: '#F5A623' },
-  streak: { emoji: '🔥', color: '#FF7675' },
-  perfect_week: { emoji: '⭐', color: '#FFD700' },
-  level_up: { emoji: '🚀', color: '#00B894' },
+  xp: { color: COLORS.primary },
+  badge: { color: '#F5A623' },
+  streak: { color: '#FF7675' },
+  perfect_week: { color: '#FFD700' },
+  level_up: { color: '#00B894' },
 };
 
 function RewardItem({ event }) {
@@ -30,9 +29,6 @@ function RewardItem({ event }) {
 
   return (
     <View style={styles.item}>
-      <View style={[styles.iconCircle, { backgroundColor: meta.color + '18' }]}>
-        <Text style={styles.iconEmoji}>{event.emoji || meta.emoji}</Text>
-      </View>
       <View style={styles.itemContent}>
         <Text style={styles.itemTitle}>{event.title}</Text>
         <Text style={styles.itemDesc}>{event.description}</Text>
@@ -62,7 +58,6 @@ export default function RewardsHistory({ events = [], limit }) {
   if (displayed.length === 0) {
     return (
       <Card style={styles.emptyCard}>
-        <Text style={styles.emptyEmoji}>🎁</Text>
         <Text style={styles.emptyTitle}>No rewards yet</Text>
         <Text style={styles.emptyText}>
           Complete sessions, earn badges, and build streaks to fill up your rewards history!
@@ -93,16 +88,6 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     gap: SPACING.sm,
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconEmoji: {
-    fontSize: 18,
-  },
   itemContent: {
     flex: 1,
   },
@@ -131,10 +116,6 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: 'center',
     paddingVertical: SPACING.xl,
-  },
-  emptyEmoji: {
-    fontSize: 32,
-    marginBottom: SPACING.sm,
   },
   emptyTitle: {
     fontSize: FONT_SIZES.md,

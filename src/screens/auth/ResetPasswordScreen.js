@@ -8,7 +8,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useAuth } from '../../store/useAppHooks';
 import { updatePassword } from '../../services/auth';
 import { toUserMessage } from '../../utils/errors';
-import { notify } from '../../utils/alert';
+import { toast } from '../../utils/alert';
 import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 export default function ResetPasswordScreen() {
@@ -31,7 +31,7 @@ export default function ResetPasswordScreen() {
     setError(null);
     try {
       await updatePassword(password);
-      notify('Password updated', 'Your new password is active from now on.');
+      toast('Password updated', 'Your new password is active from now on.');
       router.replace('/(tabs)');
     } catch (err) {
       setError(toUserMessage(err, 'Could not update your password. Please try again.'));

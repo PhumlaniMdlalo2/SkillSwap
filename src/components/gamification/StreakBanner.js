@@ -13,7 +13,6 @@ export default function StreakBanner({ stats }) {
     <Card style={styles.card}>
       <View style={styles.topRow}>
         <View style={styles.streakWrap}>
-          <Text style={styles.streakIcon}>🔥</Text>
           <View>
             <Text style={styles.streakTitle}>
               {streakWeeks > 0 ? `${streakWeeks} Week Streak!` : 'Start Your Streak!'}
@@ -67,9 +66,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     flex: 1,
-  },
-  streakIcon: {
-    fontSize: 28,
   },
   streakTitle: {
     fontSize: FONT_SIZES.md,

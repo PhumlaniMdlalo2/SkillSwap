@@ -20,7 +20,7 @@ import { COLORS, SPACING, FONT_SIZES } from '../../utils/constants';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
-const CARD_HEIGHT = height * 0.55;
+const CARD_HEIGHT = height * 0.64;
 
 export default function SwapScreen() {
   const { user } = useAuth();

@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  RefreshControl,
+  Platform,
+  Pressable,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import EmptyState from '../../components/ui/EmptyState';
 import TokenBalance from '../../components/wallet/TokenBalance';
 import SessionCard from '../../components/sessions/SessionCard';
 import StreakCard from '../../components/gamification/StreakCard';
@@ -32,6 +41,7 @@ export default function HomeScreen() {
     queryKey: ['sessions', user?.user_id],
     queryFn: () => api.getSessionsForUser(user.user_id),
     enabled,
+    placeholderData: keepPreviousData,
     select: (all) => all.filter((s) => s.status === 'pending').slice(0, 3),
   });
 
@@ -64,7 +74,13 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchSessions(), refetchRequests(), refreshWallet(), refetchStats(), refetchWeekly()]);
+      await Promise.all([
+        refetchSessions(),
+        refetchRequests(),
+        refreshWallet(),
+        refetchStats(),
+        refetchWeekly(),
+      ]);
     } finally {
       setRefreshing(false);
     }
@@ -87,7 +103,7 @@ export default function HomeScreen() {
           )
         }
       >
-        <Text style={styles.greeting}>Hi {user?.name?.split(' ')[0] ?? 'there'} 👋</Text>
+        <Text style={styles.greeting}>Hi {user?.name?.split(' ')[0] ?? 'there'}</Text>
         <Text style={styles.subGreeting}>Here's what's happening in your skill exchange.</Text>
 
         <StreakCard stats={userStats} sessionsThisWeek={sessionsThisWeek} />
@@ -133,31 +149,39 @@ export default function HomeScreen() {
               label="Skill Match"
               onPress={() => router.push('/(tabs)/swap')}
             />
-            <QuickAction
-              icon="trophy"
-              label="Passport"
-              onPress={() => router.push('/passport')}
-            />
+            <QuickAction icon="trophy" label="Passport" onPress={() => router.push('/passport')} />
           </View>
         </ScrollView>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Upcoming sessions</Text>
-          <Text style={styles.sectionLink} onPress={() => router.push('/sessions')}>
-            See all
-          </Text>
+          <Pressable
+            onPress={() => router.push('/sessions')}
+            hitSlop={12}
+            accessibilityRole="link"
+            accessibilityLabel="See all upcoming sessions"
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text style={styles.sectionLink}>See all</Text>
+          </Pressable>
         </View>
 
         {sessions.length === 0 ? (
           <Card>
-            <Text style={styles.emptyText}>No upcoming sessions yet. Go book one!</Text>
-            <Button
-              title="Browse Skills"
-              variant="secondary"
-              fullWidth={false}
-              onPress={() => router.push('/(tabs)/explore')}
-              style={{ marginTop: SPACING.sm }}
-            />
+            <EmptyState
+              icon="calendar-outline"
+              title="No upcoming sessions yet"
+              subtitle="Go book one!"
+            >
+              <Button
+                title="Browse Skills"
+                variant="secondary"
+                size="sm"
+                fullWidth={false}
+                onPress={() => router.push('/(tabs)/explore')}
+                style={{ marginTop: SPACING.md, alignSelf: 'center' }}
+              />
+            </EmptyState>
           </Card>
         ) : (
           sessions.map((session) => (
@@ -279,8 +303,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '600',
   },
-  emptyText: {
-    fontSize: FONT_SIZES.sm,
-    color: COLORS.textMuted,
+  pressed: {
+    opacity: 0.6,
   },
 });

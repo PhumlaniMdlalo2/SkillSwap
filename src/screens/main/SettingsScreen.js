@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/ui/Button';
@@ -9,13 +9,13 @@ import { confirmAction } from '../../utils/alert';
 export default function SettingsScreen() {
   const { logout } = useAuth();
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     confirmAction('Log out', 'Are you sure you want to log out?', {
       confirmText: 'Log out',
       destructive: true,
       onConfirm: logout,
     });
-  };
+  }, [logout]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

@@ -368,6 +368,19 @@ export async function uploadAvatar({ userId, uri, base64, mimeType = 'image/jpeg
   return data;
 }
 
+export async function updateBio({ userId, bio }) {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ bio })
+    .eq('user_id', userId)
+    .select(
+      'user_id, name, avatar, bio, rating, review_count, xp, streak_weeks, last_active_week, created_at',
+    )
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function getLearningInterests(userId) {
   const { data, error } = await supabase
     .from('learning_interests')
